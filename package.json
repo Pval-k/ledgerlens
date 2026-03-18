@@ -5,6 +5,8 @@
   "description": "LedgerLens monorepo (api, worker, web) managed by pnpm workspaces.",
   "author": "",
   "license": "MIT",
-  "scripts": {}
+  "scripts": {},
+  "dependencies": {
+    "@nestjs/cli": "^11.0.16"
+  }
 }
-
