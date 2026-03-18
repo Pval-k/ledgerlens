@@ -1,0 +1,14 @@
+{
+  "name": "@ledgerlens/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LedgerLens web frontend (React + TypeScript).",
+  "main": "dist/index.js",
+  "scripts": {},
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
+
