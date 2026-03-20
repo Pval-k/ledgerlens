@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
@@ -19,5 +19,15 @@ export class AppController {
   async createDocument(@Body('originalFilename') originalFilename?: string) {
     const safeFilename = originalFilename?.trim() || 'untitled.csv';
     return this.appService.createDocument(safeFilename);
+  }
+
+  @Post('documents/:id/process')
+  async processDocument(@Param('id') id: string) {
+    return this.appService.enqueueDocument(id);
+  }
+
+  @Get('documents/:id/status')
+  async getDocumentStatus(@Param('id') id: string) {
+    return this.appService.getDocumentStatus(id);
   }
 }

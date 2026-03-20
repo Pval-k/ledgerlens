@@ -20,5 +20,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       },
     });
   }
+
+  getDocumentById(id: string) {
+    return this.document.findUnique({
+      where: { id },
+    });
+  }
+
+  updateDocumentStatus(id: string, status: string) {
+    return this.document.update({
+      where: { id },
+      data: { status },
+    });
+  }
 }
 
