@@ -22,7 +22,7 @@ export class QueueService implements OnModuleInit {
       INGEST_DOCUMENT_JOB,
       { documentId },
       {
-        jobId: `doc:${documentId}`,
+        jobId: `doc-${documentId}`,
         attempts: 3,
         backoff: { type: 'exponential', delay: 1000 },
         removeOnComplete: 100,

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 const DOCUMENT_QUEUE_NAME = 'document-processing';
@@ -14,7 +15,14 @@ if (!redisUrl) {
   throw new Error('REDIS_URL is required');
 }
 
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is required');
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 
 const worker = new Worker<IngestJobData>(
   DOCUMENT_QUEUE_NAME,
