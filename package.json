@@ -5,7 +5,17 @@
   "description": "LedgerLens monorepo (api, worker, web) managed by pnpm workspaces.",
   "author": "",
   "license": "MIT",
-  "scripts": {},
+  "pnpm": {
+    "overrides": {
+      "@types/react": "18.3.12",
+      "@types/react-dom": "18.3.1"
+    }
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @ledgerlens/api start:dev",
+    "dev:web": "pnpm --filter @ledgerlens/web dev",
+    "dev:worker": "pnpm --filter @ledgerlens/worker start:dev"
+  },
   "dependencies": {
     "@nestjs/cli": "^11.0.16"
   }

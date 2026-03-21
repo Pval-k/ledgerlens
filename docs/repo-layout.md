@@ -77,10 +77,16 @@ No HTTP server — it **pulls jobs** from Redis and talks to Postgres + S3.
 
 ## `apps/web` (frontend)
 
-Currently mostly **scaffold** (`package.json`, `README.md`). When Stage 2+ frontend work lands, expect something like:
+| Path | Role |
+| ---- | ---- |
+| **`vite.config.ts`** | Vite dev server (port **5173**), React plugin. |
+| **`src/main.tsx`**, **`src/App.tsx`** | Router: home (upload + list), document detail. |
+| **`src/api/client.ts`** | Typed `fetch` helpers for documents, upload, transactions, analytics. |
+| **`src/pages/`** | **`HomePage`** (CSV upload, document list), **`DocumentPage`** (status, charts, transaction table). |
+| **`src/index.css`** | Flat UI tokens (teal accent, DM Sans), cards, tables, badges. |
+| **`.env.example`** | **`VITE_API_URL`** — API base URL (defaults to `http://localhost:3000` in code). |
 
-- `src/` — React components, pages, API client
-- `public/` — static assets
+The API enables **CORS** for browser calls (`apps/api/src/main.ts`; set **`CORS_ORIGIN=http://localhost:5173`** in production-minded setups).
 
 ---
 

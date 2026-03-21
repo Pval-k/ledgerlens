@@ -44,6 +44,9 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 10 | **API layout:** split Nest `apps/api/src` into **`health/`**, **`documents/`**, **`prisma/`**, **`queue/`**, **`storage/`** feature + infra modules (same HTTP routes) |
 | 11 | **Worker TS gotchas documented + fixes:** `prisma.transaction` delegate vs `$transaction`, adapter typings, **`LedgerTransactionDelegate`**, **`pnpm run generate`** in worker |
 | 12 | **Stage 6 — materialized analytics:** `DocumentMonthlySummary` + `CategoryMonthlySummary` tables; worker **`rebuildDocumentSummaries`** after successful ingest; **`GET /documents/:id/analytics/monthly`** and **`GET /documents/:id/analytics/by-category`** (filters + pagination) |
+| 13 | **Web app (Vite + React):** upload flow, document list/detail, **Recharts** monthly + category charts, paginated transactions; API **CORS**; root **`pnpm` overrides** so **`@types/react@18`** matches React 18 (avoids JSX typing clashes with React 19 types pulled in by other workspace packages) |
+| 14 | **Web dev ergonomics:** Vite **`/api` proxy** to **`127.0.0.1:3000`** (same-origin JSON calls in dev, no CORS); default **`apiBase`** is **`/api`** when **`VITE_API_URL`** unset in dev; **`fetch`** network errors append a hint to start **`pnpm dev:api`** |
+| 15 | **Nest + IDE in a pnpm monorepo:** root **`.npmrc`** **`public-hoist-pattern[]=@nestjs/*`** so **`@nestjs/*`** appears under the **workspace** `node_modules` (helps TypeScript when the editor opens the repo root); **`apps/api/tsconfig.json`** explicit **`include`** / **`exclude`**; **`.vscode/settings.json`** sets **`typescript.tsdk`** to **`apps/api/node_modules/typescript/lib`** |
 
 ---
 
@@ -114,6 +117,30 @@ These are **real issues** that showed up while building this repo (or are typica
 **Symptom:** `ERR_PNPM_UNEXPECTED_STORE` when `pnpm add` runs in an environment whose store path differs from the machine that originally installed `node_modules`.
 
 **Fix:** Re-run `pnpm install` (or align `store-dir`) on that machine; use a consistent pnpm version.
+
+### Web (Vite): document list showed a network / “load failed” error
+
+**Symptom:** The home page could not **`fetch`** **`GET /documents`** — red error state instead of the list.
+
+**Why:** The SPA on **`localhost:5173`** was calling the API on **`localhost:3000`**. That is **cross-origin**; **`Failed to fetch`** happens if the API is not listening, or if CORS / environment quirks block the response. Beginners often had the API stopped or assumed same “localhost” meant same security context (it does not — different ports = different origins).
+
+**Fix we used:** A **Vite dev proxy** — browser calls **`/api/...`** on the dev server; Vite forwards to **`http://127.0.0.1:3000/...`**. The client defaults to **`apiBase = /api`** in dev when **`VITE_API_URL`** is unset. **`pnpm dev:api`** must still be running. **`fetch`** failures now append a short hint in the error text.
+
+**Lesson:** For local SPAs, a proxy or consistent **`VITE_API_URL`** + working CORS beats “it works in curl” confusion.
+
+### Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'” (even though `nest build` works)
+
+**Symptom:** Cursor / VS Code shows a red squiggle on **`import { NestFactory } from '@nestjs/core'`** in **`apps/api/src/main.ts`**, or similar for other **`@nestjs/*`** imports.
+
+**Why:** **pnpm** installs packages in a content-addressed store and symlinks them per package. **`@nestjs/core`** might exist only under **`apps/api/node_modules`**, while the TypeScript language service often treats the **repository root** as the project context. With no **`@nestjs/core`** symlink at the **root** `node_modules`, module resolution fails in the IDE even though **`pnpm --filter @ledgerlens/api build`** succeeds.
+
+**Fix we used:**
+
+1. **Root `.npmrc`** — **`public-hoist-pattern[]=@nestjs/*`** so **`@nestjs/*`** is also linked at the workspace **`node_modules/@nestjs/`** (run **`pnpm install`** after changing `.npmrc`).
+2. **`apps/api/tsconfig.json`** — **`include`**: **`src/**/*.ts`**, **`test/**/*.ts`**; **`exclude`**: **`node_modules`**, **`dist`**.
+3. **`.vscode/settings.json`** — **`"typescript.tsdk": "apps/api/node_modules/typescript/lib"`** so the editor uses the same **TypeScript** as the API package (path is workspace-relative).
+
+**After pulling these changes or reinstalling:** open the Command Palette (**`Cmd+Shift+P`** on macOS, **`Ctrl+Shift+P`** on Windows/Linux) → run **`TypeScript: Restart TS Server`**, or **`Developer: Reload Window`**, so the language service reloads **`node_modules`** and **`typescript.tsdk`**.
 
 ### BullMQ jobs: old payloads in Redis
 
@@ -579,10 +606,37 @@ Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv
 
 ---
 
+## Phase 12 — Web UI (upload, explorer, charts)
+
+### What we added
+
+- **`apps/web`** — **Vite 6** + **React 18** + **react-router-dom** + **Recharts**; **`pnpm dev`** / **`pnpm build`**; optional **`VITE_API_URL`** for production builds.
+- **Upload** — `POST /documents/upload-session` → `PUT` presigned URL → `POST /documents/:id/complete-upload`; navigate to the document with **location state** carrying the filename for the header.
+- **Document detail** — Polls **`GET /documents/:id/status`** until **`COMPLETED`** or **`FAILED`**; then loads analytics + transactions.
+- **Charts** — Monthly grouped bars (income vs expense) from **`/analytics/monthly`**; horizontal bars for **category expense** totals aggregated client-side from **`/analytics/by-category`** (up to 500 rows).
+- **API** — **`enableCors`** in **`main.ts`** (optional **`CORS_ORIGIN`** comma-separated list). Still useful when the browser talks to the API **directly** (e.g. `vite build` with a full **`VITE_API_URL`**, or tools other than the dev proxy).
+- **Monorepo** — Root **`pnpm.overrides`** pin **`@types/react`** / **`@types/react-dom`** to v18 so `tsc` and JSX match **`react@18`** in `apps/web`.
+
+### Dev proxy (why `GET /documents` stopped failing in the browser)
+
+**Symptom:** The home page showed errors when loading the document list — the UI was calling **`http://localhost:3000`** from the **Vite** origin (**`http://localhost:5173`**). That is **cross-origin**; if the API was down, bound differently, or CORS was finicky, **`fetch`** failed with a network error.
+
+**Fix:** In `apps/web/vite.config.ts`, **`server.proxy`** and **`preview.proxy`** forward **`/api/*`** → **`http://127.0.0.1:3000/*`** (path rewritten to strip the **`/api`** prefix). The API client (`apps/web/src/api/client.ts`) uses **`apiBase()` = `/api`** in dev when **`VITE_API_URL`** is not set, so JSON requests are **same-origin** with the Vite dev server and **do not rely on CORS** for local development. Presigned **PUT** uploads still go **directly** to MinIO/S3 (unchanged).
+
+**Docs:** `apps/web/README.md` and **`.env.example`** explain: leave **`VITE_API_URL`** unset for **`pnpm dev`**; set it for production builds.
+
+### Nest + editor: pick up `node_modules` and `typescript.tsdk`
+
+See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** subsection above. Quick refresh: Command Palette → **`TypeScript: Restart TS Server`** or **`Developer: Reload Window`**.
+
+---
+
 ## Current Summary
 
 Implemented so far:
 
+- **Web UI** (`apps/web`): Vite + React — upload, list, document view with charts + transaction table; **dev proxy** (`/api` → Nest on port 3000) for reliable local API calls
+- **Tooling:** pnpm **`public-hoist-pattern`** for **`@nestjs/*`**, **`.vscode/settings.json`** **`typescript.tsdk`**, and **restart TS server** after install so the IDE matches **`nest build`**
 - Running backend service (NestJS) with **feature modules** (`health`, `documents`, `analytics`, `prisma`, `queue`, `storage`)
 - Postgres schema and migrations via Prisma (documents + **transactions** + **summary tables**)
 - Presigned direct-to-**MinIO** upload flow (same pattern will work for **AWS S3**) + completion endpoint
