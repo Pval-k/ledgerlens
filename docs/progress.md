@@ -43,6 +43,7 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 9 | **CSV ingestion (Stage 5):** `Transaction` model, worker parses CSV → DB, `ingestError` on failure, `GET /documents/:id/transactions` |
 | 10 | **API layout:** split Nest `apps/api/src` into **`health/`**, **`documents/`**, **`prisma/`**, **`queue/`**, **`storage/`** feature + infra modules (same HTTP routes) |
 | 11 | **Worker TS gotchas documented + fixes:** `prisma.transaction` delegate vs `$transaction`, adapter typings, **`LedgerTransactionDelegate`**, **`pnpm run generate`** in worker |
+| 12 | **Stage 6 — materialized analytics:** `DocumentMonthlySummary` + `CategoryMonthlySummary` tables; worker **`rebuildDocumentSummaries`** after successful ingest; **`GET /documents/:id/analytics/monthly`** and **`GET /documents/:id/analytics/by-category`** (filters + pagination) |
 
 ---
 
@@ -331,6 +332,8 @@ Endpoints (current):
 - `POST /documents/:id/complete-upload` (after client PUT to MinIO/S3)
 - `GET /documents/:id/status`
 - `GET /documents/:id/transactions` (paginated; added in Stage 5)
+- `GET /documents/:id/analytics/monthly` — materialized monthly rollups (`from` / `to` `YYYY-MM`, `page`, `limit`; Stage 6)
+- `GET /documents/:id/analytics/by-category` — per-category monthly slices (optional `category`; Stage 6)
 
 Example request body for upload session:
 
@@ -554,7 +557,7 @@ Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv
 
 ### Why
 
-- **Beginner-friendly navigation** and a clear place to add **`analytics/`** (or similar) for Stage 6.
+- **Beginner-friendly navigation** and a clear place for feature modules (Stage 6 added **`analytics/`** — see Phase 11).
 
 ### Docs
 
@@ -562,20 +565,34 @@ Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv
 
 ---
 
+## Phase 11 — Materialized summaries + analytics API (Stage 6)
+
+### What we added
+
+- **Prisma models** — **`DocumentMonthlySummary`** (per document, UTC `YYYY-MM`, currency): net, income total, expense total (positive magnitude of outflows), transaction count. **`CategoryMonthlySummary`** adds **`categoryKey`** (empty string = uncategorized). Unique constraints prevent duplicate buckets; **`onDelete: Cascade`** from **`Document`**.
+- **Worker** — after the ingest **`$transaction`** commits, **`rebuildDocumentSummaries`** deletes prior summary rows for that document, aggregates from **`Transaction`**, then batched **`createMany`**. Keys split on **`|`** only between fixed segments (`yearMonth|currency` and `yearMonth|currency|categoryKey`) so values with **`|`** in category are handled when parsing keys back out.
+- **API** — **`AnalyticsModule`** (`apps/api/src/analytics/`): **`GET /documents/:id/analytics/monthly`** and **`GET /documents/:id/analytics/by-category`** with optional **`from`** / **`to`** (`YYYY-MM`), **`page`** / **`limit`** (≤ 100), and on the category route optional **`category`** (omit = all categories; empty = uncategorized only). **`404`** if the document does not exist; **`400`** for bad month strings or **`from` > `to`**. Decimal fields are JSON **strings** (same idea as **`GET /documents/:id/transactions`**).
+
+### Migration
+
+- `apps/api/prisma/migrations/20260322120000_add_analytics_summaries/`
+
+---
+
 ## Current Summary
 
 Implemented so far:
 
-- Running backend service (NestJS) with **feature modules** (`health`, `documents`, `prisma`, `queue`, `storage`)
-- Postgres schema and migrations via Prisma (documents + **transactions**)
+- Running backend service (NestJS) with **feature modules** (`health`, `documents`, `analytics`, `prisma`, `queue`, `storage`)
+- Postgres schema and migrations via Prisma (documents + **transactions** + **summary tables**)
 - Presigned direct-to-**MinIO** upload flow (same pattern will work for **AWS S3**) + completion endpoint
 - Redis-backed queue in API
-- Worker: download from storage → **parse CSV** → persist normalized transactions (see **“Worker + @prisma/adapter-pg”** above for TS notes + **`worker run generate`**)
-- Read API: **paginated transactions** per document
+- Worker: download from storage → **parse CSV** → persist normalized transactions → **rebuild materialized summaries** (see **“Worker + @prisma/adapter-pg”** above for TS notes + **`worker run generate`**)
+- Read API: **paginated transactions** per document; **analytics** monthly and by-category rollups with filters
 - Async processing pipeline with status tracking and **structured ingest errors**
 
 ---
 
 ## Where to add the next chapter
 
-Next natural step: **deterministic analytics** (monthly/category summaries, anomaly flags) and/or **auth** so documents belong to users. Add a **new phase** here when you ship it — progress stays **additive**.
+Next natural step: **auth** so documents belong to users, richer **dashboard UI** in `apps/web`, and/or **anomaly / rules** on top of the same summary tables. Add a **new phase** here when you ship it — progress stays **additive**.

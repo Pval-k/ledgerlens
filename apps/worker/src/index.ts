@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { rebuildDocumentSummaries } from './aggregate-summaries';
 import { bytesToUtf8, parseLedgerCsv } from './parse-csv';
 
 const DOCUMENT_QUEUE_NAME = 'document-processing';
@@ -177,6 +178,8 @@ const worker = new Worker<IngestJobData>(
     );
 
     await prisma.$transaction(steps);
+
+    await rebuildDocumentSummaries(prisma, documentId);
 
     console.log(
       `[worker] stored ${parsed.length} transactions for document ${documentId}`,

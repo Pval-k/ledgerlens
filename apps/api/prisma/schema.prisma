@@ -20,6 +20,8 @@ model Document {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   transactions     Transaction[]
+  monthlySummaries DocumentMonthlySummary[]
+  categorySummaries CategoryMonthlySummary[]
 }
 
 /// Normalized row from an uploaded file (CSV v1). One document has many transactions.
@@ -38,4 +40,41 @@ model Transaction {
 
   @@index([documentId])
   @@index([documentId, postedAt])
+}
+
+/// Materialized rollups per calendar month (UTC) for dashboard queries.
+model DocumentMonthlySummary {
+  id               String   @id @default(uuid())
+  documentId       String
+  document         Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// `YYYY-MM` (UTC, from `postedAt`).
+  yearMonth        String
+  currency         String   @default("USD")
+  netAmount        Decimal  @db.Decimal(19, 4)
+  incomeTotal      Decimal  @db.Decimal(19, 4)
+  /// Positive magnitude of outflows (sum of negative amounts as positive).
+  expenseTotal     Decimal  @db.Decimal(19, 4)
+  transactionCount Int
+  updatedAt        DateTime @updatedAt
+
+  @@unique([documentId, yearMonth, currency])
+  @@index([documentId, yearMonth])
+}
+
+/// Per-category slice within a month (uncategorized uses empty `categoryKey`).
+model CategoryMonthlySummary {
+  id               String   @id @default(uuid())
+  documentId       String
+  document         Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  yearMonth        String
+  categoryKey      String
+  currency         String   @default("USD")
+  netAmount        Decimal  @db.Decimal(19, 4)
+  incomeTotal      Decimal  @db.Decimal(19, 4)
+  expenseTotal     Decimal  @db.Decimal(19, 4)
+  transactionCount Int
+  updatedAt        DateTime @updatedAt
+
+  @@unique([documentId, yearMonth, currency, categoryKey])
+  @@index([documentId, yearMonth])
 }

@@ -47,6 +47,7 @@ Nest is organized by **feature modules** + **infrastructure folders**.
 | **`src/app.module.ts`** | Root module: imports **feature** + **infra** modules below. |
 | **`src/health/`** | **`HealthModule`** — `GET /` (hello / liveness). |
 | **`src/documents/`** | **`DocumentsModule`** — documents + upload + transactions HTTP API. |
+| **`src/analytics/`** | **`AnalyticsModule`** — `GET /documents/:id/analytics/monthly` and `.../by-category` (materialized rollups; filters + pagination). |
 | **`src/prisma/`** | **`PrismaModule`** (`@Global`) + **`PrismaService`** — DB access. |
 | **`src/queue/`** | **`QueueModule`** + **`QueueService`** + **`queue.constants.ts`** — BullMQ. |
 | **`src/storage/`** | **`StorageModule`** + **`StorageService`** — MinIO/S3 presigned URLs, `HeadObject`. |
@@ -57,7 +58,7 @@ Nest is organized by **feature modules** + **infrastructure folders**.
 
 **Note:** You may see `src/generated/prisma/` locally — that can be from an old Prisma output path. The **normal** generated client lives under **`node_modules/@prisma/client`** after `pnpm exec prisma generate`. Ignore or delete local `generated/` if you’re not using a custom output.
 
-**Next:** Stage 6 analytics can add **`src/analytics/`** (or similar) as another feature module and import it from `AppModule`.
+**Stage 6** added **`src/analytics/`** (`AnalyticsModule`) for read-only dashboard queries backed by materialized summary tables; the worker refreshes those tables after each successful ingest.
 
 ---
 
@@ -65,7 +66,8 @@ Nest is organized by **feature modules** + **infrastructure folders**.
 
 | Path | Role |
 | ---- | ---- |
-| **`src/index.ts`** | BullMQ worker: connect Redis, process `INGEST_DOCUMENT`, download S3, parse CSV, write DB. |
+| **`src/index.ts`** | BullMQ worker: connect Redis, process `INGEST_DOCUMENT`, download S3, parse CSV, write DB, **rebuild per-document summary tables**. |
+| **`src/aggregate-summaries.ts`** | Recomputes **`DocumentMonthlySummary`** / **`CategoryMonthlySummary`** for one document from transactions. |
 | **`src/parse-csv.ts`** | CSV parsing rules (headers, amounts, dates). |
 | **`.env` / `.env.example`** | Same idea as API: `DATABASE_URL`, `REDIS_URL`, `S3_*`. |
 
