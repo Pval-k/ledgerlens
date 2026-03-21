@@ -1,13 +1,17 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PrismaService } from './prisma.service';
-import { QueueService } from './queue.service';
-import { StorageService } from './storage.service';
+import { DocumentsModule } from './documents/documents.module';
+import { HealthModule } from './health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { QueueModule } from './queue/queue.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService, PrismaService, QueueService, StorageService],
+  imports: [
+    PrismaModule,
+    QueueModule,
+    StorageModule,
+    DocumentsModule,
+    HealthModule,
+  ],
 })
 export class AppModule {}

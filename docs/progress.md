@@ -41,6 +41,8 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 7 | Worker app pulls jobs, updates `Document.status` (first a **fake sleep**, then real **MinIO download**) |
 | 8 | **Object storage integration:** `Document` gains `storageKey`, optional `contentType`, `sizeBytes`, `sha256`; presigned upload + worker reads file from storage |
 | 9 | **CSV ingestion (Stage 5):** `Transaction` model, worker parses CSV → DB, `ingestError` on failure, `GET /documents/:id/transactions` |
+| 10 | **API layout:** split Nest `apps/api/src` into **`health/`**, **`documents/`**, **`prisma/`**, **`queue/`**, **`storage/`** feature + infra modules (same HTTP routes) |
+| 11 | **Worker TS gotchas documented + fixes:** `prisma.transaction` delegate vs `$transaction`, adapter typings, **`LedgerTransactionDelegate`**, **`pnpm run generate`** in worker |
 
 ---
 
@@ -82,7 +84,7 @@ These are **real issues** that showed up while building this repo (or are typica
 
 **Symptom:** Build error like: a type used in a **decorated** parameter (`@Body() body: SomeType`) must be imported with `import type` when `isolatedModules` and `emitDecoratorMetadata` are on.
 
-**Fix:** In `app.controller.ts`, `UploadSessionBody` is imported as `import type { UploadSessionBody } from './app.service'` so the compiler does not emit runtime imports for a type-only symbol.
+**Fix:** In `documents.controller.ts`, `UploadSessionBody` is imported as `import type { UploadSessionBody } from './documents.service'` so the compiler does not emit runtime imports for a type-only symbol.
 
 ### Prisma client on `PrismaService`: sometimes the IDE disagrees with reality
 
@@ -96,13 +98,13 @@ These are **real issues** that showed up while building this repo (or are typica
 
 **Symptom:** After adding **`ingestError`** to `Document`, TypeScript or the IDE still treated `getDocumentStatus` as if **`document.ingestError` did not exist** — even though `schema.prisma` was correct and **`pnpm exec tsc`** could pass once the generated client was fresh.
 
-**Why it happens:** `@prisma/client` is **generated** from the schema. Until you regenerate, types lag. Separately, **`findUnique` with `include`** can produce return types that are easy for the language service to infer **too narrowly**, so new scalars sometimes look “missing” in `app.service.ts`.
+**Why it happens:** `@prisma/client` is **generated** from the schema. Until you regenerate, types lag. Separately, **`findUnique` with `include`** can produce return types that are easy for the language service to infer **too narrowly**, so new scalars sometimes look “missing” in `documents.service.ts`.
 
 **Fix we used:**
 
 1. Always run **`pnpm exec prisma generate`** (from `apps/api`, or `pnpm --filter @ledgerlens/api exec prisma generate`) after any **`schema.prisma`** change.
 2. For status queries, use an explicit **`select`** that lists **`ingestError`** (and other fields you need), not only `include: { _count: … }`.
-3. Export a **`DocumentWithTransactionCount`** type via **`Prisma.DocumentGetPayload<{ select: … }>`** in `prisma.service.ts` and use it in **`getDocumentStatus`** so `ingestError` is part of the **public type contract**.
+3. Export a **`DocumentWithTransactionCount`** type via **`Prisma.DocumentGetPayload<{ select: … }>`** in `prisma/prisma.service.ts` and use it in **`getDocumentStatus`** so `ingestError` is part of the **public type contract**.
 
 **Lesson:** Treat “Prisma types are wrong” as “regenerate first,” then tighten queries with **`select` + `DocumentGetPayload`** if inference is still noisy.
 
@@ -127,6 +129,26 @@ These are **real issues** that showed up while building this repo (or are typica
 **Large files:** `createMany` is chunked (2000 rows per batch) inside one DB transaction so we stay under Postgres parameter limits.
 
 **Re-runs:** Before insert, the worker **`deleteMany` transactions for that `documentId`** so a retry does not duplicate rows.
+
+### Worker + `@prisma/adapter-pg`: `prisma.transaction` vs `$transaction`, and `ingestError` in updates
+
+**Symptom:** TypeScript / the IDE says **`prisma.transaction` does not exist** (it suggests **`$transaction`**), or **`ingestError`** is not a valid field on **`DocumentUpdateInput`** — even though **`schema.prisma`** is correct and the code runs after **`prisma generate`**.
+
+**Why it happens:**
+
+1. **Name collision:** The Prisma **model** is called **`Transaction`**, so the client exposes a delegate **`prisma.transaction`** (CRUD for that model). That is **not** the same as **`$transaction`** (the transactional batch API). Tools often confuse the two.
+2. **Interactive transactions:** Inside **`$transaction(async (tx) => { … })`**, typings for **`tx.transaction`** are easy to get wrong for the same reason.
+3. **Driver adapter:** With **`@prisma/adapter-pg`**, generated types for **`PrismaClient` sometimes omit the `.transaction` delegate** even though it exists at runtime.
+4. **Stale client / IDE:** If **`@prisma/client`** was not regenerated after adding **`ingestError`**, **`DocumentUpdateInput`** may not list it until you run generate and refresh the TS server.
+
+**Fix we used:**
+
+1. Prefer **array** **`prisma.$transaction([ … ])`** for the CSV ingest batch (delete many → chunked create many → update document), instead of an interactive callback, so you are not fighting **`tx`** typing.
+2. Add a small explicit type (**`LedgerTransactionDelegate`**) and cast **`prisma` → `{ transaction: LedgerTransactionDelegate }`** when calling **`deleteMany` / `createMany`** on the **`Transaction`** table.
+3. For **`ingestError`** on **`document.update`**, use **`as Prisma.DocumentUpdateInput`** on the **`data`** object where the IDE still lags.
+4. In **`apps/worker/package.json`**, add **`"generate": "prisma generate --schema=../api/prisma/schema.prisma"`** and a **`prisma`** dev dependency so you can run **`pnpm --filter @ledgerlens/worker run generate`** after any **`apps/api/prisma/schema.prisma`** change (same generated client the API uses).
+
+**Lesson:** **`prisma.transaction`** = model delegate; **`$transaction`** = transactional wrapper — different symbols. After schema edits, **generate** from **API or worker** script and, if needed, **cast** adapter + **`ingestError`** until types and IDE match.
 
 ---
 
@@ -254,7 +276,7 @@ This:
 
 File:
 
-- `apps/api/src/prisma.service.ts`
+- `apps/api/src/prisma/prisma.service.ts` *(was `src/prisma.service.ts` before Phase 10)*
 
 Purpose:
 
@@ -265,15 +287,11 @@ Current behavior:
 - Extends `PrismaClient`
 - Connects automatically on app startup using `$connect()`
 
-#### 8) PrismaService registered in AppModule
+#### 8) PrismaModule registered in AppModule
 
 File:
 
-- `apps/api/src/app.module.ts`
-
-Changes:
-
-- Added `PrismaService` to providers
+- `apps/api/src/app.module.ts` imports **`PrismaModule`** (`apps/api/src/prisma/prisma.module.ts`), which provides **`PrismaService`** globally (`@Global()`).
 
 This makes DB access available through Nest dependency injection.
 
@@ -281,11 +299,11 @@ This makes DB access available through Nest dependency injection.
 
 ### Phase 4 - Document API (Basic CRUD → evolved into upload API)
 
-#### 9) AppService updated (business logic layer)
+#### 9) Documents service (business logic layer)
 
 File:
 
-- `apps/api/src/app.service.ts`
+- `apps/api/src/documents/documents.service.ts` *(older docs referred to `app.service.ts` before Phase 10)*
 
 Uses `PrismaService` for DB interactions.
 
@@ -298,19 +316,21 @@ Methods (current):
 
 *(Earlier iterations included `createDocument` and `enqueueDocument` without object storage; those were replaced when MinIO/S3 became real — see “Bugs, gotchas” above.)*
 
-#### 10) AppController updated (HTTP layer)
+#### 10) HTTP layer (documents + health)
 
-File:
+Files:
 
-- `apps/api/src/app.controller.ts`
+- `apps/api/src/documents/documents.controller.ts` — document routes below
+- `apps/api/src/health/health.controller.ts` — `GET /` hello *(split out in Phase 10)*
 
 Endpoints (current):
 
-- `GET /` (existing health/hello route)
+- `GET /` — health/hello (`HealthController`)
 - `GET /documents` (list documents)
 - `POST /documents/upload-session` (presigned upload)
 - `POST /documents/:id/complete-upload` (after client PUT to MinIO/S3)
 - `GET /documents/:id/status`
+- `GET /documents/:id/transactions` (paginated; added in Stage 5)
 
 Example request body for upload session:
 
@@ -519,15 +539,38 @@ Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv
 
 ---
 
+## Phase 10 — Nest API feature modules (before Stage 6)
+
+### What we did
+
+- Replaced a single flat `src/app.controller.ts` + `src/app.service.ts` with:
+  - **`src/health/`** — `HealthModule` + `HealthController` → `GET /`
+  - **`src/documents/`** — `DocumentsModule` + `DocumentsController` + `DocumentsService` + `filename.util.ts` → all `/documents/*` routes
+  - **`src/prisma/`** — `PrismaModule` (`@Global`) + `PrismaService` (exports `DocumentWithTransactionCount` type)
+  - **`src/queue/`** — `QueueModule` + `QueueService` + `queue.constants.ts`
+  - **`src/storage/`** — `StorageModule` + `StorageService`
+- **`src/app.module.ts`** only **imports** these modules (no business logic in the root module).
+- Unit test moved to **`health.controller.spec.ts`**; e2e sets **`DATABASE_URL`** / **`REDIS_URL`** defaults and **`afterEach`** closes the app.
+
+### Why
+
+- **Beginner-friendly navigation** and a clear place to add **`analytics/`** (or similar) for Stage 6.
+
+### Docs
+
+- See [`docs/repo-layout.md`](repo-layout.md) for the full map.
+
+---
+
 ## Current Summary
 
 Implemented so far:
 
-- Running backend service (NestJS)
+- Running backend service (NestJS) with **feature modules** (`health`, `documents`, `prisma`, `queue`, `storage`)
 - Postgres schema and migrations via Prisma (documents + **transactions**)
 - Presigned direct-to-**MinIO** upload flow (same pattern will work for **AWS S3**) + completion endpoint
 - Redis-backed queue in API
-- Worker: download from storage → **parse CSV** → persist normalized transactions
+- Worker: download from storage → **parse CSV** → persist normalized transactions (see **“Worker + @prisma/adapter-pg”** above for TS notes + **`worker run generate`**)
 - Read API: **paginated transactions** per document
 - Async processing pipeline with status tracking and **structured ingest errors**
 

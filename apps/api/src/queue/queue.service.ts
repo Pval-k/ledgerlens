@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { INGEST_DOCUMENT_JOB, DOCUMENT_QUEUE_NAME } from './queue.constants';
+import { DOCUMENT_QUEUE_NAME, INGEST_DOCUMENT_JOB } from './queue.constants';
 
 @Injectable()
 export class QueueService implements OnModuleInit {
@@ -31,4 +31,3 @@ export class QueueService implements OnModuleInit {
     );
   }
 }
-

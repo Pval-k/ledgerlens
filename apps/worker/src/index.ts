@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { Prisma } from '@prisma/client';
 import { Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -14,6 +15,25 @@ type IngestJobData = {
   documentId: string;
   /** Present for jobs enqueued after object-storage rollout; older jobs omit it. */
   storageKey?: string;
+};
+
+/** `prisma.transaction` model delegate — explicit for TS when using `@prisma/adapter-pg` (generated client omits `.transaction` on the adapter client type). */
+type LedgerTransactionDelegate = {
+  deleteMany: (args: {
+    where: { documentId: string };
+  }) => Prisma.PrismaPromise<Prisma.BatchPayload>;
+  createMany: (args: {
+    data: Array<{
+      id: string;
+      documentId: string;
+      postedAt: Date;
+      amount: Prisma.Decimal;
+      currency: string;
+      description: string | null;
+      category: string | null;
+      rowIndex: number;
+    }>;
+  }) => Prisma.PrismaPromise<Prisma.BatchPayload>;
 };
 
 const redisUrl = process.env.REDIS_URL;
@@ -107,7 +127,10 @@ const worker = new Worker<IngestJobData>(
 
     await prisma.document.update({
       where: { id: documentId },
-      data: { status: 'PROCESSING', ingestError: null },
+      data: {
+        status: 'PROCESSING',
+        ingestError: null,
+      } as Prisma.DocumentUpdateInput,
     });
 
     const bytes = await downloadFromStorage(storageKey);
@@ -118,12 +141,17 @@ const worker = new Worker<IngestJobData>(
 
     const parsed = parseLedgerCsv(text);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.transaction.deleteMany({ where: { documentId } });
+    // `Transaction` model delegate — runtime is `prisma.transaction`. `@prisma/adapter-pg` typings omit it; cast is intentional.
+    const ledger = (prisma as unknown as { transaction: LedgerTransactionDelegate })
+      .transaction;
+    const steps: Prisma.PrismaPromise<unknown>[] = [
+      ledger.deleteMany({ where: { documentId } }),
+    ];
 
-      for (let i = 0; i < parsed.length; i += CREATE_MANY_CHUNK) {
-        const chunk = parsed.slice(i, i + CREATE_MANY_CHUNK);
-        await tx.transaction.createMany({
+    for (let i = 0; i < parsed.length; i += CREATE_MANY_CHUNK) {
+      const chunk = parsed.slice(i, i + CREATE_MANY_CHUNK);
+      steps.push(
+        ledger.createMany({
           data: chunk.map((row) => ({
             id: randomUUID(),
             documentId,
@@ -134,14 +162,21 @@ const worker = new Worker<IngestJobData>(
             category: row.category,
             rowIndex: row.rowIndex,
           })),
-        });
-      }
+        }),
+      );
+    }
 
-      await tx.document.update({
+    steps.push(
+      prisma.document.update({
         where: { id: documentId },
-        data: { status: 'COMPLETED', ingestError: null },
-      });
-    });
+        data: {
+          status: 'COMPLETED',
+          ingestError: null,
+        } as Prisma.DocumentUpdateInput,
+      }),
+    );
+
+    await prisma.$transaction(steps);
 
     console.log(
       `[worker] stored ${parsed.length} transactions for document ${documentId}`,
@@ -168,7 +203,7 @@ worker.on('failed', async (job, err) => {
       data: {
         status: 'FAILED',
         ingestError: msg.slice(0, 8000),
-      },
+      } as Prisma.DocumentUpdateInput,
     });
   }
   console.error('[worker] job failed', err);

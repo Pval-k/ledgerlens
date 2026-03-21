@@ -4,10 +4,13 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
-describe('AppController (e2e)', () => {
+describe('App (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.DATABASE_URL ??=
+      'postgresql://postgres:postgres@127.0.0.1:5432/ledgerlens_test';
+    process.env.REDIS_URL ??= 'redis://127.0.0.1:6379';
     process.env.S3_ENDPOINT ??= 'http://127.0.0.1:9000';
     process.env.S3_ACCESS_KEY_ID ??= 'minioadmin';
     process.env.S3_SECRET_ACCESS_KEY ??= 'minioadmin';
@@ -19,6 +22,10 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+  });
+
+  afterEach(async () => {
+    await app?.close();
   });
 
   it('/ (GET)', () => {

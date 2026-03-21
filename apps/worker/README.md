@@ -19,6 +19,12 @@ Planned responsibilities:
 
 Copy env from `apps/api/.env.example` (at least `DATABASE_URL`, `REDIS_URL`, and the `S3_*` variables).
 
+After changing `apps/api/prisma/schema.prisma`, regenerate the client so this app’s types match:
+
+`pnpm --filter @ledgerlens/worker run generate`
+
+(same as `prisma generate --schema=../api/prisma/schema.prisma`).
+
 ## CSV format (v1)
 
 The worker expects a header row. **Required** columns (any of the listed header aliases):

@@ -4,11 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import type { DocumentWithTransactionCount } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { QueueService } from '../queue/queue.service';
+import { StorageService } from '../storage/storage.service';
 import { safeStorageBasename } from './filename.util';
-import type { DocumentWithTransactionCount } from './prisma.service';
-import { PrismaService } from './prisma.service';
-import { QueueService } from './queue.service';
-import { StorageService } from './storage.service';
 
 export type UploadSessionBody = {
   originalFilename?: string;
@@ -18,16 +18,12 @@ export type UploadSessionBody = {
 };
 
 @Injectable()
-export class AppService {
+export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
     private readonly storage: StorageService,
   ) {}
-
-  getHello(): string {
-    return 'Hello World!';
-  }
 
   listDocuments() {
     return this.prisma.listDocuments();

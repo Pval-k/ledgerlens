@@ -7,7 +7,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "start:dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "generate": "prisma generate --schema=../api/prisma/schema.prisma"
   },
   "author": "",
   "license": "MIT",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.15",
+    "prisma": "^7.5.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

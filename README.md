@@ -27,6 +27,7 @@ ledgerlens/
 
 ## Where to look for docs
 
+- **Where files live (repo map for beginners):** [`docs/repo-layout.md`](docs/repo-layout.md) — includes *migrations vs database* explained clearly
 - **Architecture (current design):** [`docs/architecture.md`](docs/architecture.md)
 - **Build progress (beginner-friendly diary, bugs, history):** [`docs/progress.md`](docs/progress.md)
 
