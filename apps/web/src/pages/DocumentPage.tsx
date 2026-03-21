@@ -108,7 +108,7 @@ export function DocumentPage() {
     setDeleting(true);
     try {
       await deleteDocument(id);
-      navigate('/');
+      navigate('/dashboard');
     } catch (e) {
       setDeleteErr(e instanceof Error ? e.message : 'Delete failed');
     } finally {
@@ -213,7 +213,7 @@ export function DocumentPage() {
     return (
       <div className="card">
         <p className="alert alert-error">{statusErr}</p>
-        <Link to="/">← Back</Link>
+        <Link to="/dashboard">← Back</Link>
       </div>
     );
   }
@@ -229,7 +229,7 @@ export function DocumentPage() {
   return (
     <div className="stack">
       <div className="row" style={{ marginBottom: '0.25rem' }}>
-        <Link to="/" className="muted" style={{ fontSize: '0.875rem' }}>
+        <Link to="/dashboard" className="muted" style={{ fontSize: '0.875rem' }}>
           ← Documents
         </Link>
       </div>

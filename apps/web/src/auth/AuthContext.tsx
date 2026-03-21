@@ -8,7 +8,12 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMe, login as apiLogin, signup as apiSignup } from '../api/client';
+import {
+  changePassword as apiChangePassword,
+  fetchMe,
+  login as apiLogin,
+  signup as apiSignup,
+} from '../api/client';
 import {
   getAccessToken,
   getStoredUser,
@@ -20,6 +25,7 @@ import {
 export type AuthUser = {
   id: string;
   email: string;
+  name?: string;
   createdAt?: string;
 };
 
@@ -27,7 +33,17 @@ type AuthContextValue = {
   token: string | null;
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (params: {
+    name: string;
+    email: string;
+    password: string;
+    passwordConfirm: string;
+  }) => Promise<void>;
+  changePassword: (params: {
+    currentPassword: string;
+    newPassword: string;
+    newPasswordConfirm: string;
+  }) => Promise<void>;
   logout: () => void;
 };
 
@@ -84,13 +100,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const signup = useCallback(async (email: string, password: string) => {
-    const res = await apiSignup({ email, password });
-    setAccessToken(res.accessToken);
-    setStoredUser(res.user);
-    setTokenState(res.accessToken);
-    setUser(res.user);
-  }, []);
+  const signup = useCallback(
+    async (params: {
+      name: string;
+      email: string;
+      password: string;
+      passwordConfirm: string;
+    }) => {
+      const res = await apiSignup(params);
+      setAccessToken(res.accessToken);
+      setStoredUser(res.user);
+      setTokenState(res.accessToken);
+      setUser(res.user);
+    },
+    [],
+  );
+
+  const changePassword = useCallback(
+    async (params: {
+      currentPassword: string;
+      newPassword: string;
+      newPasswordConfirm: string;
+    }) => {
+      await apiChangePassword(params);
+    },
+    [],
+  );
 
   const value = useMemo(
     () => ({
@@ -98,9 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       login,
       signup,
+      changePassword,
       logout,
     }),
-    [token, user, login, signup, logout],
+    [token, user, login, signup, changePassword, logout],
   );
 
   return (

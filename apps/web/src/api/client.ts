@@ -145,12 +145,14 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type AuthResponse = {
   accessToken: string;
-  user: { id: string; email: string };
+  user: { id: string; email: string; name: string };
 };
 
 export async function signup(body: {
+  name: string;
   email: string;
   password: string;
+  passwordConfirm: string;
 }): Promise<AuthResponse> {
   return json<AuthResponse>('/auth/signup', {
     method: 'POST',
@@ -169,12 +171,23 @@ export async function login(body: {
 }
 
 export type MeResponse = {
-  user: { id: string; email: string; createdAt: string };
+  user: { id: string; email: string; name: string; createdAt: string };
 };
 
 /** Validates the Bearer token and returns the current user from the database. */
 export async function fetchMe(): Promise<MeResponse> {
   return json<MeResponse>('/auth/me');
+}
+
+export async function changePassword(body: {
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+}): Promise<{ ok: true }> {
+  return json<{ ok: true }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export async function listDocuments(): Promise<DocumentRow[]> {

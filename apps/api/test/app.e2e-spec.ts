@@ -68,7 +68,12 @@ describe('App (e2e)', () => {
     const email = `alice.${Date.now()}@e2e.test`;
     const signup = await request(app.getHttpServer())
       .post('/auth/signup')
-      .send({ email, password: 'password12' })
+      .send({
+        name: 'Alice',
+        email,
+        password: 'password12',
+        passwordConfirm: 'password12',
+      })
       .expect(201);
 
     const token = signup.body.accessToken as string;
@@ -82,12 +87,18 @@ describe('App (e2e)', () => {
     expect(me.body.user.email).toBe(email.toLowerCase());
     expect(me.body.user.id).toBe(signup.body.user.id);
     expect(me.body.user.createdAt).toBeDefined();
+    expect(me.body.user.name).toBe('Alice');
   });
 
   it('cross-user: user B cannot read user A document status, analytics, or insights', async () => {
     const resA = await request(app.getHttpServer())
       .post('/auth/signup')
-      .send({ email: `owner.${Date.now()}@e2e.test`, password: 'password12' })
+      .send({
+        name: 'Owner',
+        email: `owner.${Date.now()}@e2e.test`,
+        password: 'password12',
+        passwordConfirm: 'password12',
+      })
       .expect(201);
     const tokenA = resA.body.accessToken as string;
     const userIdA = resA.body.user.id as string;
@@ -95,7 +106,12 @@ describe('App (e2e)', () => {
     const emailB = `other.${Date.now()}@e2e.test`;
     const resB = await request(app.getHttpServer())
       .post('/auth/signup')
-      .send({ email: emailB, password: 'password12' })
+      .send({
+        name: 'Other',
+        email: emailB,
+        password: 'password12',
+        passwordConfirm: 'password12',
+      })
       .expect(201);
     const tokenB = resB.body.accessToken as string;
 

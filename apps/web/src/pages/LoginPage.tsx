@@ -12,12 +12,13 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const from =
-    (location.state as { from?: string } | null)?.from && String(location.state.from).startsWith('/')
+    (location.state as { from?: string } | null)?.from &&
+    String((location.state as { from: string }).from).startsWith('/')
       ? (location.state as { from: string }).from
-      : '/';
+      : '/dashboard';
 
   if (token) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -75,6 +76,9 @@ export function LoginPage() {
         </form>
         <p className="muted" style={{ marginTop: '1rem', marginBottom: 0 }}>
           No account? <Link to="/signup">Create one</Link>
+        </p>
+        <p className="muted" style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          <Link to="/">← Home</Link>
         </p>
       </div>
     </div>
