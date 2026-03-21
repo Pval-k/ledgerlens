@@ -36,13 +36,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     await this.$connect();
   }
 
-  listDocuments() {
+  listDocuments(userId: string) {
     return this.document.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   createUploadSession(data: {
+    userId: string;
     id: string;
     originalFilename: string;
     storageKey: string;
@@ -52,6 +54,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   }) {
     return this.document.create({
       data: {
+        userId: data.userId,
         id: data.id,
         originalFilename: data.originalFilename,
         storageKey: data.storageKey,
@@ -62,17 +65,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  getDocumentById(id: string) {
-    return this.document.findUnique({
-      where: { id },
+  findDocumentForUser(id: string, userId: string) {
+    return this.document.findFirst({
+      where: { id, userId },
     });
   }
 
   getDocumentByIdWithTransactionCount(
     id: string,
+    userId: string,
   ): Promise<DocumentWithTransactionCount | null> {
-    return this.document.findUnique({
-      where: { id },
+    return this.document.findFirst({
+      where: { id, userId },
       select: {
         id: true,
         originalFilename: true,

@@ -1,3 +1,5 @@
+import { getAccessToken, setAccessToken } from '../auth/token';
+
 /**
  * In `pnpm dev`, default to same-origin `/api` (Vite proxies to Nest — avoids CORS).
  * Override with `VITE_API_URL` (e.g. full URL for `vite build` / production).
@@ -105,6 +107,20 @@ async function readError(res: Response): Promise<string> {
   return text || res.statusText;
 }
 
+function bearerHeaders(): Record<string, string> {
+  const t = getAccessToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function handleUnauthorized(res: Response): void {
+  if (res.status !== 401) return;
+  const hadToken = !!getAccessToken();
+  setAccessToken(null);
+  if (hadToken && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ledgerlens:unauthorized'));
+  }
+}
+
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${apiBase()}${path}`;
   let res: Response;
@@ -114,6 +130,7 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        ...bearerHeaders(),
         ...init?.headers,
       },
     });
@@ -121,8 +138,34 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
     const msg = e instanceof Error ? e.message : 'Network error';
     throw new Error(`${msg}. ${networkHint()}`);
   }
+  handleUnauthorized(res);
   if (!res.ok) throw new Error(await readError(res));
   return res.json() as Promise<T>;
+}
+
+export type AuthResponse = {
+  accessToken: string;
+  user: { id: string; email: string };
+};
+
+export async function signup(body: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
+  return json<AuthResponse>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function login(body: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
+  return json<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export async function listDocuments(): Promise<DocumentRow[]> {
@@ -135,12 +178,16 @@ export async function deleteDocument(documentId: string): Promise<void> {
   try {
     res = await fetch(url, {
       method: 'DELETE',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...bearerHeaders(),
+      },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Network error';
     throw new Error(`${msg}. ${networkHint()}`);
   }
+  handleUnauthorized(res);
   if (res.status === 204) {
     return;
   }

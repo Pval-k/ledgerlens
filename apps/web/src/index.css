@@ -111,6 +111,13 @@ button {
   font-weight: 500;
 }
 
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .app-main {
   flex: 1;
   width: 100%;
@@ -174,6 +181,23 @@ button {
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.input:focus {
+  outline: 2px solid var(--accent-muted);
+  outline-offset: 1px;
+  border-color: var(--accent);
 }
 
 .btn-ghost {

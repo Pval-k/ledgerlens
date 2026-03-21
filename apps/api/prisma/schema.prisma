@@ -6,6 +6,15 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id               String     @id @default(cuid())
+  email            String     @unique
+  hashedPassword   String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  documents        Document[]
+}
+
 model Document {
   id               String        @id @default(uuid())
   originalFilename String
@@ -17,11 +26,15 @@ model Document {
   status           String        @default("PENDING")
   /// Set when ingestion fails (worker); cleared on success.
   ingestError      String?
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   transactions     Transaction[]
   monthlySummaries DocumentMonthlySummary[]
   categorySummaries CategoryMonthlySummary[]
+
+  @@index([userId])
 }
 
 /// Normalized row from an uploaded file (CSV v1). One document has many transactions.

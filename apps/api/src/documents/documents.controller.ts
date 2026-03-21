@@ -8,46 +8,64 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { AuthUser } from '../auth/types/auth-user.type';
 import type { UploadSessionBody } from './documents.service';
 import { DocumentsService } from './documents.service';
 
 @Controller()
+@UseGuards(JwtAuthGuard)
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Get('documents')
-  async listDocuments() {
-    return this.documentsService.listDocuments();
+  listDocuments(@CurrentUser() user: AuthUser) {
+    return this.documentsService.listDocuments(user.userId);
   }
 
   /** Creates a document row and returns a presigned PUT URL for MinIO/S3. */
   @Post('documents/upload-session')
-  async createUploadSession(@Body() body: UploadSessionBody) {
-    return this.documentsService.createUploadSession(body);
+  async createUploadSession(
+    @CurrentUser() user: AuthUser,
+    @Body() body: UploadSessionBody,
+  ) {
+    return this.documentsService.createUploadSession(user.userId, body);
   }
 
   /** After the client PUTs the object, call this to verify it exists and enqueue ingestion. */
   @Post('documents/:id/complete-upload')
-  async completeUpload(@Param('id') id: string) {
-    return this.documentsService.completeUpload(id);
+  async completeUpload(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.documentsService.completeUpload(user.userId, id);
   }
 
   @Get('documents/:id/status')
-  async getDocumentStatus(@Param('id') id: string) {
-    return this.documentsService.getDocumentStatus(id);
+  async getDocumentStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.documentsService.getDocumentStatus(user.userId, id);
   }
 
   /** Deletes the document, related DB rows (cascade), and the stored object (best-effort). */
   @Delete('documents/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteDocument(@Param('id') id: string) {
-    await this.documentsService.deleteDocument(id);
+  async deleteDocument(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    await this.documentsService.deleteDocument(user.userId, id);
   }
 
   /** Paginated normalized transactions for a document (newest first). */
   @Get('documents/:id/transactions')
   async listTransactions(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
@@ -55,6 +73,9 @@ export class DocumentsController {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const rawLimit = parseInt(limitStr ?? '50', 10) || 50;
     const limit = Math.min(100, Math.max(1, rawLimit));
-    return this.documentsService.listTransactions(id, { page, limit });
+    return this.documentsService.listTransactions(user.userId, id, {
+      page,
+      limit,
+    });
   }
 }

@@ -40,11 +40,8 @@ function serializeSummaryRow<
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async ensureDocument(documentId: string) {
-    const doc = await this.prisma.document.findUnique({
-      where: { id: documentId },
-      select: { id: true },
-    });
+  private async ensureDocument(documentId: string, userId: string) {
+    const doc = await this.prisma.findDocumentForUser(documentId, userId);
     if (!doc) {
       throw new NotFoundException('Document not found');
     }
@@ -52,9 +49,10 @@ export class AnalyticsService {
 
   async listMonthly(
     documentId: string,
+    userId: string,
     query: { from?: string; to?: string; page: number; limit: number },
   ) {
-    await this.ensureDocument(documentId);
+    await this.ensureDocument(documentId, userId);
 
     const from = parseYearMonth('from', query.from);
     const to = parseYearMonth('to', query.to);
@@ -100,6 +98,7 @@ export class AnalyticsService {
 
   async listByCategory(
     documentId: string,
+    userId: string,
     query: {
       from?: string;
       to?: string;
@@ -108,7 +107,7 @@ export class AnalyticsService {
       category?: string;
     },
   ) {
-    await this.ensureDocument(documentId);
+    await this.ensureDocument(documentId, userId);
 
     const from = parseYearMonth('from', query.from);
     const to = parseYearMonth('to', query.to);

@@ -25,17 +25,18 @@ export class DocumentsService {
     private readonly storage: StorageService,
   ) {}
 
-  listDocuments() {
-    return this.prisma.listDocuments();
+  listDocuments(userId: string) {
+    return this.prisma.listDocuments(userId);
   }
 
-  async createUploadSession(body: UploadSessionBody) {
+  async createUploadSession(userId: string, body: UploadSessionBody) {
     const originalFilename =
       body.originalFilename?.trim() || 'untitled.csv';
     const id = randomUUID();
     const storageKey = `documents/${id}/${safeStorageBasename(originalFilename)}`;
 
     const document = await this.prisma.createUploadSession({
+      userId,
       id,
       originalFilename,
       storageKey,
@@ -68,8 +69,11 @@ export class DocumentsService {
     };
   }
 
-  async completeUpload(documentId: string) {
-    const document = await this.prisma.getDocumentById(documentId);
+  async completeUpload(userId: string, documentId: string) {
+    const document = await this.prisma.findDocumentForUser(
+      documentId,
+      userId,
+    );
     if (!document) {
       throw new NotFoundException('Document not found');
     }
@@ -108,9 +112,12 @@ export class DocumentsService {
     };
   }
 
-  async getDocumentStatus(documentId: string) {
+  async getDocumentStatus(userId: string, documentId: string) {
     const document: DocumentWithTransactionCount | null =
-      await this.prisma.getDocumentByIdWithTransactionCount(documentId);
+      await this.prisma.getDocumentByIdWithTransactionCount(
+        documentId,
+        userId,
+      );
     if (!document) {
       return { ok: false as const, message: 'Document not found' };
     }
@@ -130,10 +137,14 @@ export class DocumentsService {
   }
 
   async listTransactions(
+    userId: string,
     documentId: string,
     query: { page: number; limit: number },
   ) {
-    const document = await this.prisma.getDocumentById(documentId);
+    const document = await this.prisma.findDocumentForUser(
+      documentId,
+      userId,
+    );
     if (!document) {
       throw new NotFoundException('Document not found');
     }
@@ -160,8 +171,11 @@ export class DocumentsService {
    * Removes the document row (cascades transactions + summaries). Deletes the object in
    * MinIO/S3 first when possible; storage failures are logged but do not block DB deletion.
    */
-  async deleteDocument(documentId: string) {
-    const document = await this.prisma.getDocumentById(documentId);
+  async deleteDocument(userId: string, documentId: string) {
+    const document = await this.prisma.findDocumentForUser(
+      documentId,
+      userId,
+    );
     if (!document) {
       throw new NotFoundException('Document not found');
     }
@@ -175,6 +189,8 @@ export class DocumentsService {
       );
     }
 
-    await this.prisma.document.delete({ where: { id: documentId } });
+    await this.prisma.document.delete({
+      where: { id: documentId, userId },
+    });
   }
 }
