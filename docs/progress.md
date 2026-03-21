@@ -48,6 +48,10 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 14 | **Web dev ergonomics:** Vite **`/api` proxy** to **`127.0.0.1:3000`** (same-origin JSON calls in dev, no CORS); default **`apiBase`** is **`/api`** when **`VITE_API_URL`** unset in dev; **`fetch`** network errors append a hint to start **`pnpm dev:api`** |
 | 15 | **Nest + IDE in a pnpm monorepo:** root **`.npmrc`** **`public-hoist-pattern[]=@nestjs/*`** so **`@nestjs/*`** appears under the **workspace** `node_modules` (helps TypeScript when the editor opens the repo root); **`apps/api/tsconfig.json`** explicit **`include`** / **`exclude`**; **`.vscode/settings.json`** sets **`typescript.tsdk`** to **`apps/api/node_modules/typescript/lib`** |
 | 16 | **`DELETE /documents/:id`:** removes **`Document`** (cascades transactions + materialized summaries), **`StorageService.deleteObject`** for MinIO/S3 (best-effort if delete fails); web list + detail **Delete** with confirm |
+| 17 | **Auth & multi-tenancy:** **`User`** model, **`Document.userId`**, JWT (**`POST /auth/signup`**, **`/login`**, **`GET /auth/me`**, **`POST /auth/change-password`**), bcrypt, **`JwtAuthGuard`** on documents + analytics; queries scoped by user; **`User.name`** + signup password confirmation |
+| 18 | **Web IA:** public **`/`** landing (sign in / create account); app on **`/dashboard`**; **`/settings`** change password; JWT in **`localStorage`** + **`Authorization: Bearer`**; **`fetchMe`** session hydration |
+| 19 | **Hardening:** **`@nestjs/throttler`**, **`nestjs-pino`** structured logs, **`PrismaClientExceptionFilter`** (clearer errors when DB schema lags migrations), **`docs/E2E.md`** + cross-user isolation e2e |
+| 20 | **Insights stub:** **`GET /documents/:id/insights`** (user-scoped placeholder for future RAG/anomalies); web **Insights** card on document page |
 
 ---
 
@@ -195,6 +199,10 @@ These are **real issues** that showed up while building this repo (or are typica
 
 - Optional `ingestError` (worker sets on failure, clears on success)
 - New table **`Transaction`** linked to `Document` (`onDelete: Cascade`)
+
+**Era D — multi-user auth**
+
+- **`User`** (`name`, `email`, `hashedPassword`, …); **`Document.userId`** → **`User`** (cascade); all document/analytics APIs require JWT and scope by **`userId`**
 
 ---
 
@@ -634,22 +642,60 @@ See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** su
 
 ---
 
+## Phase 13 — Auth, multi-tenant users, and JWT (Stage 3 delivered)
+
+### What we added
+
+- **Prisma** — **`User`** (`id`, `email`, **`name`**, `hashedPassword`, timestamps); **`Document.userId`** FK (cascade delete); migrations including legacy bootstrap user for existing rows.
+- **API** — **`AuthModule`** (`signup`, `login`, **`me`**, **`change-password`**), **`JwtStrategy`** (Bearer), **`JwtAuthGuard`**, **`@CurrentUser()`**; **`class-validator`** on DTOs; login/signup return **`user`** including **`name`**.
+- **Scope** — All **`/documents/*`** and **`/documents/:id/analytics/*`** (and **`/insights`**) require JWT and filter by **`userId`**; wrong owner → **404** on status (and related routes).
+- **PrismaService** — **`onModuleDestroy`** + **`$disconnect()`** for cleaner shutdown (tests + process exit).
+
+### Web (routes)
+
+- **`/`** — public landing (**Sign in** / **Create account**); logged-in users redirect to **`/dashboard`**.
+- **`/dashboard`** — document list + upload (protected).
+- **`/login`**, **`/signup`** — name, email, password, retype password on signup; JWT stored after success.
+- **`/settings`** — change password (current + new + confirm).
+
+### Ops note (real bug we hit)
+
+- If **`pnpm exec prisma migrate deploy`** was not run after adding **`User.name`**, signup returned **500** until the migration applied. **`PrismaClientExceptionFilter`** maps **P2022** (missing column) to a JSON message that mentions **`migrate deploy`**.
+
+**Docs:** `apps/api/docs/E2E.md`, `apps/api/docs/HARDENING.md`.
+
+---
+
+## Phase 14 — Rate limits, logging, e2e isolation
+
+- **Throttling** — global limit + stricter limits on **`/auth/signup`** and **`/auth/login`**; **`@SkipThrottle()`** on **`GET /`** health.
+- **Logging** — **`nestjs-pino`** (pretty in dev, JSON in prod, silent under Jest).
+- **E2E** — `apps/api/test/app.e2e-spec.ts`: **`GET /auth/me`**, signup + **`me`** round-trip, **cross-user** cannot read another user’s document **status** / **analytics** / **insights**; loads **`apps/api/.env`** for **`DATABASE_URL`**.
+
+---
+
+## Phase 15 — Insights placeholder (API + web)
+
+- **`GET /documents/:id/insights`** — authenticated, user-scoped stub response (`status: planned`, message about future RAG/anomalies).
+- **Web** — fetches insights alongside monthly/category analytics when document is **`COMPLETED`**; shows an **Insights** card (copy-only until backend logic exists).
+
+---
+
 ## Current Summary
 
 Implemented so far:
 
-- **Web UI** (`apps/web`): Vite + React — upload, list, document view with charts + transaction table; **dev proxy** (`/api` → Nest on port 3000) for reliable local API calls
+- **Web UI** (`apps/web`): Vite + React — **landing**, **auth flows**, **dashboard** (upload + list), **settings** (password), document view with charts + transactions + insights stub; **dev proxy** (`/api` → Nest on port 3000) for reliable local API calls
 - **Tooling:** pnpm **`public-hoist-pattern`** for **`@nestjs/*`**, **`.vscode/settings.json`** **`typescript.tsdk`**, and **restart TS server** after install so the IDE matches **`nest build`**
-- Running backend service (NestJS) with **feature modules** (`health`, `documents`, `analytics`, `prisma`, `queue`, `storage`)
-- Postgres schema and migrations via Prisma (documents + **transactions** + **summary tables**)
-- Presigned direct-to-**MinIO** upload flow (same pattern will work for **AWS S3**) + completion endpoint
-- Redis-backed queue in API
-- Worker: download from storage → **parse CSV** → persist normalized transactions → **rebuild materialized summaries** (see **“Worker + @prisma/adapter-pg”** above for TS notes + **`worker run generate`**)
-- Read API: **paginated transactions** per document; **analytics** monthly and by-category rollups with filters
-- Async processing pipeline with status tracking and **structured ingest errors**
+- **NestJS** — feature modules: **`health`**, **`auth`**, **`documents`**, **`analytics`**, **`prisma`**, **`queue`**, **`storage`**; global **`ValidationPipe`**, **`PrismaClientExceptionFilter`**, throttler + pino in **`AppModule`** / **`main.ts`**
+- **Postgres + Prisma** — users, documents (per-user), transactions, materialized summaries; migrations under **`apps/api/prisma/migrations/`**
+- **Presigned MinIO/S3** upload + complete-upload + worker pipeline unchanged; all new documents tied to authenticated **`userId`**
+- **Redis** queue in API; **worker** ingests CSV → transactions → summaries
+- **Read API** — paginated transactions; monthly + by-category analytics; **`/insights`** stub — all **user-scoped**
+- **Tests** — unit (`health`); e2e optional (needs DB + migrate)
 
 ---
 
 ## Where to add the next chapter
 
-Next natural step: **auth** so documents belong to users, richer **dashboard UI** in `apps/web`, and/or **anomaly / rules** on top of the same summary tables. Add a **new phase** here when you ship it — progress stays **additive**.
+Next natural steps: **replace the insights stub** with real anomaly detection and/or **RAG-backed narratives** on the same user-scoped document data; **idempotency** + **Redis-backed rate limits** for multi-instance API (see **`apps/api/docs/HARDENING.md`**). Add a **new phase** here when you ship it — progress stays **additive**.

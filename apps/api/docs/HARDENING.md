@@ -2,8 +2,9 @@
 
 ## Implemented
 
-- **Rate limiting** — `@nestjs/throttler` global guard (default: 120 requests / minute / IP). Health checks use `@SkipThrottle()`. `POST /auth/signup` and `POST /auth/login` use a stricter limit (30 / minute / IP).
+- **Rate limiting** — `@nestjs/throttler` global guard (default: 120 requests / minute / IP). Health checks use `@SkipThrottle()`. `POST /auth/signup` and `POST /auth/login` use a stricter limit (30 / minute / IP); `POST /auth/change-password` is limited (15 / minute / IP).
 - **Structured logging** — `nestjs-pino` request + application logs (JSON in production, `pino-pretty` in development). Tests run with `silent` log level.
+- **Prisma errors** — `PrismaClientExceptionFilter` maps known `PrismaClientKnownRequestError` codes (e.g. **P2022** missing column) to JSON responses that hint running `pnpm exec prisma migrate deploy` from `apps/api` when the DB lags the schema.
 
 ## E2E
 
