@@ -12,12 +12,14 @@ import {
 } from 'recharts';
 import {
   deleteDocument,
+  getDocumentInsights,
   getDocumentStatus,
   listCategoryAnalytics,
   listMonthlyAnalytics,
   listTransactions,
   type CategorySummaryRow,
   type DocumentStatusOk,
+  type InsightsResponse,
   type Paged,
   type SummaryRow,
   type TransactionsPage,
@@ -90,6 +92,7 @@ export function DocumentPage() {
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [monthly, setMonthly] = useState<Paged<SummaryRow> | null>(null);
   const [byCat, setByCat] = useState<Paged<CategorySummaryRow> | null>(null);
+  const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [tx, setTx] = useState<TransactionsPage | null>(null);
   const [txPage, setTxPage] = useState(1);
   const [analyticsErr, setAnalyticsErr] = useState<string | null>(null);
@@ -116,12 +119,14 @@ export function DocumentPage() {
   const loadAnalytics = useCallback(async () => {
     setAnalyticsErr(null);
     try {
-      const [m, c] = await Promise.all([
+      const [m, c, ins] = await Promise.all([
         listMonthlyAnalytics(id, { limit: 120 }),
         listCategoryAnalytics(id, { limit: 500 }),
+        getDocumentInsights(id),
       ]);
       setMonthly(m);
       setByCat(c);
+      setInsights(ins);
     } catch (e) {
       setAnalyticsErr(e instanceof Error ? e.message : 'Analytics failed');
     }
@@ -135,28 +140,31 @@ export function DocumentPage() {
   useEffect(() => {
     let cancelled = false;
     const iv = setInterval(async () => {
-      const s = await getDocumentStatus(id);
-      if (cancelled) return;
-      if (!('ok' in s) || !s.ok) {
-        setStatusErr(s.message ?? 'Not found');
+      try {
+        const s = await getDocumentStatus(id);
+        if (cancelled) return;
+        setStatus(s);
+        if (s.status === 'COMPLETED' || s.status === 'FAILED') {
+          clearInterval(iv);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setStatusErr(e instanceof Error ? e.message : 'Not found');
         setStatus(null);
-        clearInterval(iv);
-        return;
-      }
-      setStatus(s);
-      if (s.status === 'COMPLETED' || s.status === 'FAILED') {
         clearInterval(iv);
       }
     }, 2000);
-    void getDocumentStatus(id).then((s) => {
-      if (cancelled) return;
-      if (!('ok' in s) || !s.ok) {
-        setStatusErr(s.message ?? 'Not found');
+    void (async () => {
+      try {
+        const s = await getDocumentStatus(id);
+        if (cancelled) return;
+        setStatus(s);
+      } catch (e) {
+        if (cancelled) return;
+        setStatusErr(e instanceof Error ? e.message : 'Not found');
         setStatus(null);
-        return;
       }
-      setStatus(s);
-    });
+    })();
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -283,6 +291,15 @@ export function DocumentPage() {
         <>
           {analyticsErr ? (
             <div className="alert alert-error">{analyticsErr}</div>
+          ) : null}
+
+          {insights ? (
+            <div className="card">
+              <h2 className="card__title">Insights</h2>
+              <p className="muted" style={{ marginTop: '-0.5rem' }}>
+                {insights.message}
+              </p>
+            </div>
           ) : null}
 
           <div className="card">

@@ -44,6 +44,18 @@ export class AuthService {
     };
   }
 
+  /** Current user from DB (JWT only proves identity; this refreshes profile). */
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, createdAt: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return { user };
+  }
+
   async login(dto: LoginDto) {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({

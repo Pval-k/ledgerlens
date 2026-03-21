@@ -119,7 +119,7 @@ export class DocumentsService {
         userId,
       );
     if (!document) {
-      return { ok: false as const, message: 'Document not found' };
+      throw new NotFoundException('Document not found');
     }
 
     return {

@@ -9,6 +9,12 @@ import { AnalyticsService } from './analytics.service';
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  /** Future: anomalies + narrative insights (RAG); scoped to the document owner. */
+  @Get('documents/:id/insights')
+  insights(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.analyticsService.insightsStub(id, user.userId);
+  }
+
   /** Materialized monthly rollups (UTC month buckets), filterable and paginated. */
   @Get('documents/:id/analytics/monthly')
   async listMonthly(

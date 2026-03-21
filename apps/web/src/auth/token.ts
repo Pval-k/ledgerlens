@@ -1,7 +1,7 @@
 const KEY = 'ledgerlens_access_token';
 const USER_KEY = 'ledgerlens_user';
 
-export type StoredUser = { id: string; email: string };
+export type StoredUser = { id: string; email: string; createdAt?: string };
 
 export function getAccessToken(): string | null {
   try {

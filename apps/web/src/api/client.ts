@@ -168,6 +168,15 @@ export async function login(body: {
   });
 }
 
+export type MeResponse = {
+  user: { id: string; email: string; createdAt: string };
+};
+
+/** Validates the Bearer token and returns the current user from the database. */
+export async function fetchMe(): Promise<MeResponse> {
+  return json<MeResponse>('/auth/me');
+}
+
 export async function listDocuments(): Promise<DocumentRow[]> {
   return json<DocumentRow[]>('/documents');
 }
@@ -229,14 +238,10 @@ export async function completeUpload(documentId: string): Promise<unknown> {
   });
 }
 
-export type DocumentStatusResponse =
-  | DocumentStatusOk
-  | { ok: false; message: string };
-
 export async function getDocumentStatus(
   documentId: string,
-): Promise<DocumentStatusResponse> {
-  return json(`/documents/${documentId}/status`);
+): Promise<DocumentStatusOk> {
+  return json<DocumentStatusOk>(`/documents/${documentId}/status`);
 }
 
 export async function listTransactions(
@@ -265,6 +270,18 @@ export async function listMonthlyAnalytics(
   return json<Paged<SummaryRow>>(
     `/documents/${documentId}/analytics/monthly?${q.toString()}`,
   );
+}
+
+export type InsightsResponse = {
+  documentId: string;
+  status: 'planned';
+  message: string;
+};
+
+export async function getDocumentInsights(
+  documentId: string,
+): Promise<InsightsResponse> {
+  return json<InsightsResponse>(`/documents/${documentId}/insights`);
 }
 
 export async function listCategoryAnalytics(

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin, signup as apiSignup } from '../api/client';
+import { fetchMe, login as apiLogin, signup as apiSignup } from '../api/client';
 import {
   getAccessToken,
   getStoredUser,
@@ -20,6 +20,7 @@ import {
 export type AuthUser = {
   id: string;
   email: string;
+  createdAt?: string;
 };
 
 type AuthContextValue = {
@@ -61,6 +62,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () =>
       window.removeEventListener('ledgerlens:unauthorized', onUnauthorized);
   }, [logout, navigate]);
+
+  /** Hydrate profile from the server when a token exists (no JWT decoding for identity). */
+  useEffect(() => {
+    if (!token) return;
+    void fetchMe()
+      .then((me) => {
+        setStoredUser(me.user);
+        setUser(me.user);
+      })
+      .catch(() => {
+        logout();
+      });
+  }, [token, logout]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await apiLogin({ email, password });
