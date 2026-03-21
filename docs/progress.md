@@ -92,6 +92,20 @@ These are **real issues** that showed up while building this repo (or are typica
 
 **Lesson:** If Prisma types look wrong, run **`pnpm exec prisma generate`** from `apps/api` after schema changes; the client is generated code.
 
+### Prisma + new fields (`ingestError` on `Document`): stale client vs. inference
+
+**Symptom:** After adding **`ingestError`** to `Document`, TypeScript or the IDE still treated `getDocumentStatus` as if **`document.ingestError` did not exist** — even though `schema.prisma` was correct and **`pnpm exec tsc`** could pass once the generated client was fresh.
+
+**Why it happens:** `@prisma/client` is **generated** from the schema. Until you regenerate, types lag. Separately, **`findUnique` with `include`** can produce return types that are easy for the language service to infer **too narrowly**, so new scalars sometimes look “missing” in `app.service.ts`.
+
+**Fix we used:**
+
+1. Always run **`pnpm exec prisma generate`** (from `apps/api`, or `pnpm --filter @ledgerlens/api exec prisma generate`) after any **`schema.prisma`** change.
+2. For status queries, use an explicit **`select`** that lists **`ingestError`** (and other fields you need), not only `include: { _count: … }`.
+3. Export a **`DocumentWithTransactionCount`** type via **`Prisma.DocumentGetPayload<{ select: … }>`** in `prisma.service.ts` and use it in **`getDocumentStatus`** so `ingestError` is part of the **public type contract**.
+
+**Lesson:** Treat “Prisma types are wrong” as “regenerate first,” then tighten queries with **`select` + `DocumentGetPayload`** if inference is still noisy.
+
 ### Monorepo + pnpm: store path warnings
 
 **Symptom:** `ERR_PNPM_UNEXPECTED_STORE` when `pnpm add` runs in an environment whose store path differs from the machine that originally installed `node_modules`.
