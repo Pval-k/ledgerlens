@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   completeUpload,
   createUploadSession,
+  deleteDocument,
   listDocuments,
   putUpload,
   type DocumentRow,
@@ -14,6 +15,7 @@ export function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoadError(null);
@@ -48,6 +50,26 @@ export function HomePage() {
       setUploadError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function onDeleteDoc(doc: DocumentRow) {
+    if (
+      !window.confirm(
+        `Delete “${doc.originalFilename}”? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setLoadError(null);
+    setDeletingId(doc.id);
+    try {
+      await deleteDocument(doc.id);
+      await refresh();
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -110,10 +132,20 @@ export function HomePage() {
           <ul className="doc-list">
             {docs.map((d) => (
               <li key={d.id}>
-                <Link to={`/documents/${d.id}`}>
-                  <span className="doc-list__name">{d.originalFilename}</span>
-                  <span className="badge badge-neutral">{d.status}</span>
-                </Link>
+                <div className="doc-list__row">
+                  <Link className="doc-list__link" to={`/documents/${d.id}`}>
+                    <span className="doc-list__name">{d.originalFilename}</span>
+                    <span className="badge badge-neutral">{d.status}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="btn btn-danger-ghost"
+                    disabled={deletingId === d.id}
+                    onClick={() => void onDeleteDoc(d)}
+                  >
+                    {deletingId === d.id ? '…' : 'Delete'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

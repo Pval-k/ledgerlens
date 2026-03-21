@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  deleteDocument,
   getDocumentStatus,
   listCategoryAnalytics,
   listMonthlyAnalytics,
@@ -82,6 +83,7 @@ type LocationState = { filename?: string };
 
 export function DocumentPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const location = useLocation();
   const titleName = (location.state as LocationState | null)?.filename ?? null;
   const [status, setStatus] = useState<DocumentStatusOk | null>(null);
@@ -91,7 +93,25 @@ export function DocumentPage() {
   const [tx, setTx] = useState<TransactionsPage | null>(null);
   const [txPage, setTxPage] = useState(1);
   const [analyticsErr, setAnalyticsErr] = useState<string | null>(null);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const txLimit = 25;
+
+  async function onDeleteDocument() {
+    if (!window.confirm('Delete this document? This cannot be undone.')) {
+      return;
+    }
+    setDeleteErr(null);
+    setDeleting(true);
+    try {
+      await deleteDocument(id);
+      navigate('/');
+    } catch (e) {
+      setDeleteErr(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const loadAnalytics = useCallback(async () => {
     setAnalyticsErr(null);
@@ -207,7 +227,7 @@ export function DocumentPage() {
       </div>
 
       <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h1 style={{ fontSize: '1.25rem' }}>
               {titleName ?? `${status.documentId.slice(0, 8)}…`}
@@ -216,8 +236,23 @@ export function DocumentPage() {
               Updated {fmtDate(status.updatedAt)}
             </p>
           </div>
-          <span className={statusBadge(status.status)}>{status.status}</span>
+          <div className="row" style={{ gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+            <button
+              type="button"
+              className="btn btn-danger-ghost"
+              disabled={deleting}
+              onClick={() => void onDeleteDocument()}
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+            <span className={statusBadge(status.status)}>{status.status}</span>
+          </div>
         </div>
+        {deleteErr ? (
+          <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
+            {deleteErr}
+          </div>
+        ) : null}
         {status.ingestError ? (
           <div className="alert alert-error" style={{ marginTop: '1rem' }}>
             {status.ingestError}

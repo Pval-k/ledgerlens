@@ -129,6 +129,26 @@ export async function listDocuments(): Promise<DocumentRow[]> {
   return json<DocumentRow[]>('/documents');
 }
 
+export async function deleteDocument(documentId: string): Promise<void> {
+  const url = `${apiBase()}/documents/${documentId}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Network error';
+    throw new Error(`${msg}. ${networkHint()}`);
+  }
+  if (res.status === 204) {
+    return;
+  }
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+}
+
 export async function createUploadSession(body: {
   originalFilename: string;
   contentType?: string;

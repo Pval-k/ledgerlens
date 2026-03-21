@@ -47,6 +47,7 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 13 | **Web app (Vite + React):** upload flow, document list/detail, **Recharts** monthly + category charts, paginated transactions; API **CORS**; root **`pnpm` overrides** so **`@types/react@18`** matches React 18 (avoids JSX typing clashes with React 19 types pulled in by other workspace packages) |
 | 14 | **Web dev ergonomics:** Vite **`/api` proxy** to **`127.0.0.1:3000`** (same-origin JSON calls in dev, no CORS); default **`apiBase`** is **`/api`** when **`VITE_API_URL`** unset in dev; **`fetch`** network errors append a hint to start **`pnpm dev:api`** |
 | 15 | **Nest + IDE in a pnpm monorepo:** root **`.npmrc`** **`public-hoist-pattern[]=@nestjs/*`** so **`@nestjs/*`** appears under the **workspace** `node_modules` (helps TypeScript when the editor opens the repo root); **`apps/api/tsconfig.json`** explicit **`include`** / **`exclude`**; **`.vscode/settings.json`** sets **`typescript.tsdk`** to **`apps/api/node_modules/typescript/lib`** |
+| 16 | **`DELETE /documents/:id`:** removes **`Document`** (cascades transactions + materialized summaries), **`StorageService.deleteObject`** for MinIO/S3 (best-effort if delete fails); web list + detail **Delete** with confirm |
 
 ---
 
@@ -341,6 +342,7 @@ Methods (current):
 - `createUploadSession(body)` — DB row + presigned PUT URL
 - `completeUpload(documentId)` — `HeadObject`, persist size/type, enqueue job
 - `getDocumentStatus(documentId)`
+- `deleteDocument(documentId)` — `DeleteObject` in storage (best-effort), then `document.delete` (cascade)
 
 *(Earlier iterations included `createDocument` and `enqueueDocument` without object storage; those were replaced when MinIO/S3 became real — see “Bugs, gotchas” above.)*
 
@@ -359,6 +361,7 @@ Endpoints (current):
 - `POST /documents/:id/complete-upload` (after client PUT to MinIO/S3)
 - `GET /documents/:id/status`
 - `GET /documents/:id/transactions` (paginated; added in Stage 5)
+- `DELETE /documents/:id` — removes document row (cascades transactions + summaries), deletes object in MinIO/S3 (best-effort)
 - `GET /documents/:id/analytics/monthly` — materialized monthly rollups (`from` / `to` `YYYY-MM`, `page`, `limit`; Stage 6)
 - `GET /documents/:id/analytics/by-category` — per-category monthly slices (optional `category`; Stage 6)
 

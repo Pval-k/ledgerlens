@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -33,6 +36,13 @@ export class DocumentsController {
   @Get('documents/:id/status')
   async getDocumentStatus(@Param('id') id: string) {
     return this.documentsService.getDocumentStatus(id);
+  }
+
+  /** Deletes the document, related DB rows (cascade), and the stored object (best-effort). */
+  @Delete('documents/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteDocument(@Param('id') id: string) {
+    await this.documentsService.deleteDocument(id);
   }
 
   /** Paginated normalized transactions for a document (newest first). */

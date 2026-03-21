@@ -155,4 +155,26 @@ export class DocumentsService {
       })),
     };
   }
+
+  /**
+   * Removes the document row (cascades transactions + summaries). Deletes the object in
+   * MinIO/S3 first when possible; storage failures are logged but do not block DB deletion.
+   */
+  async deleteDocument(documentId: string) {
+    const document = await this.prisma.getDocumentById(documentId);
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    try {
+      await this.storage.deleteObject(document.storageKey);
+    } catch (err) {
+      console.warn(
+        `[documents] deleteObject failed for ${document.storageKey}:`,
+        err,
+      );
+    }
+
+    await this.prisma.document.delete({ where: { id: documentId } });
+  }
 }

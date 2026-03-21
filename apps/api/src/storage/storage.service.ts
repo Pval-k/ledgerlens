@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -139,5 +140,13 @@ export class StorageService {
       }
       throw err;
     }
+  }
+
+  /** Best-effort delete of the uploaded object (S3/MinIO delete is idempotent for missing keys). */
+  async deleteObject(storageKey: string): Promise<void> {
+    await this.ensureBucket();
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: storageKey }),
+    );
   }
 }

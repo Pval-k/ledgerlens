@@ -46,7 +46,7 @@ Nest is organized by **feature modules** + **infrastructure folders**.
 | **`src/main.ts`** | Boots NestJS and listens on a port (`PORT`). |
 | **`src/app.module.ts`** | Root module: imports **feature** + **infra** modules below. |
 | **`src/health/`** | **`HealthModule`** — `GET /` (hello / liveness). |
-| **`src/documents/`** | **`DocumentsModule`** — documents + upload + transactions HTTP API. |
+| **`src/documents/`** | **`DocumentsModule`** — documents + upload + transactions + **`DELETE /documents/:id`** HTTP API. |
 | **`src/analytics/`** | **`AnalyticsModule`** — `GET /documents/:id/analytics/monthly` and `.../by-category` (materialized rollups; filters + pagination). |
 | **`src/prisma/`** | **`PrismaModule`** (`@Global`) + **`PrismaService`** — DB access. |
 | **`src/queue/`** | **`QueueModule`** + **`QueueService`** + **`queue.constants.ts`** — BullMQ. |
