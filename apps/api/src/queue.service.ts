@@ -17,10 +17,10 @@ export class QueueService implements OnModuleInit {
     });
   }
 
-  async enqueueDocumentIngestion(documentId: string) {
+  async enqueueDocumentIngestion(documentId: string, storageKey: string) {
     return this.queue.add(
       INGEST_DOCUMENT_JOB,
-      { documentId },
+      { documentId, storageKey },
       {
         jobId: `doc-${documentId}`,
         attempts: 3,

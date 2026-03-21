@@ -11,5 +11,11 @@ Planned responsibilities:
 - compute deterministic aggregates (monthly/category summaries) and anomalies
 - update document status + failure details with retries/backoff
 
-Not implemented yet (Stage 0 scaffolding only).
+## Current behavior
+
+- Consumes `INGEST_DOCUMENT` jobs with `{ documentId, storageKey }` (legacy jobs may omit `storageKey`; the worker falls back to the DB row).
+- Downloads the object from MinIO/S3 using the same `S3_*` env vars as the API.
+- Still uses a short sleep as a stand-in for CSV → `transactions` parsing.
+
+Copy env from `apps/api/.env.example` (at least `DATABASE_URL`, `REDIS_URL`, and the `S3_*` variables).
 

@@ -9,6 +9,11 @@ datasource db {
 model Document {
   id               String   @id @default(uuid())
   originalFilename String
+  /// S3/MinIO object key (set when the upload session is created).
+  storageKey       String   @unique
+  contentType      String?
+  sizeBytes        Int?
+  sha256           String?
   status           String   @default("PENDING")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

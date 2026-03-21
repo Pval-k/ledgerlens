@@ -25,10 +25,22 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  createDocument(originalFilename: string) {
+  createUploadSession(data: {
+    id: string;
+    originalFilename: string;
+    storageKey: string;
+    contentType?: string | null;
+    sizeBytes?: number | null;
+    sha256?: string | null;
+  }) {
     return this.document.create({
       data: {
-        originalFilename,
+        id: data.id,
+        originalFilename: data.originalFilename,
+        storageKey: data.storageKey,
+        contentType: data.contentType ?? undefined,
+        sizeBytes: data.sizeBytes ?? undefined,
+        sha256: data.sha256 ?? undefined,
       },
     });
   }
@@ -43,6 +55,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     return this.document.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  updateDocumentObjectMetadata(
+    id: string,
+    data: { sizeBytes: number; contentType?: string },
+  ) {
+    return this.document.update({
+      where: { id },
+      data: {
+        sizeBytes: data.sizeBytes,
+        ...(data.contentType ? { contentType: data.contentType } : {}),
+      },
     });
   }
 }

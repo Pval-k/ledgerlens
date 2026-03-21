@@ -11,13 +11,22 @@ ledgerlens/
     api/        # NestJS REST API (auth, uploads, orchestration, query APIs)
     worker/     # background jobs (BullMQ consumers: parse, normalize, aggregate)
     web/        # React + TypeScript UI (upload, explorer, dashboard)
-  docs/         # architecture notes and design docs
+  docs/         # architecture.md, progress.md (build diary), etc.
   README.md
 ```
 
 ## How we’ll build this (stage-by-stage)
 
-- **Stage 0 — Folder + docs scaffold (this stage)**\n  Create the base repo structure and starter docs so every next step has a clear home.\n\n- **Stage 1 — API scaffold**\n  Add NestJS under `apps/api` and expose `GET /health`.\n\n- **Stage 2 — Web scaffold**\n  Add React under `apps/web` and call the API `GET /health`.\n\n- **Stage 3 — Database + auth**\n  Add Postgres + Prisma; implement register/login (JWT) in the API.\n\n- **Stage 4 — Upload + worker**\n  Add Redis + BullMQ; add document upload metadata; enqueue ingestion; worker consumes jobs.\n\n- **Stage 5 — CSV ingestion**\n  Parse CSV → normalize → persist `transactions`.\n\n- **Stage 6 — Deterministic analytics**\n  Compute monthly/category summaries and basic anomaly detection; expose analytics endpoints; render dashboard charts.\n+
-## Where to look for architecture\n+
-Start with [`docs/architecture.md`](docs/architecture.md).
+- **Stage 0 — Folder + docs scaffold** — Base repo structure and starter docs.
+- **Stage 1 — API scaffold** — NestJS under `apps/api` and a simple health route.
+- **Stage 2 — Web scaffold** — React under `apps/web` calling the API.
+- **Stage 3 — Database + auth** — Postgres + Prisma; register/login (JWT) in the API.
+- **Stage 4 — Upload + worker** — Redis + BullMQ; document metadata; enqueue ingestion; worker consumes jobs.
+- **Stage 5 — CSV ingestion** — Parse CSV → normalize → persist `transactions`.
+- **Stage 6 — Deterministic analytics** — Summaries, anomaly flags, analytics APIs, dashboard charts.
+
+## Where to look for docs
+
+- **Architecture (current design):** [`docs/architecture.md`](docs/architecture.md)
+- **Build progress (beginner-friendly diary, bugs, history):** [`docs/progress.md`](docs/progress.md)
 

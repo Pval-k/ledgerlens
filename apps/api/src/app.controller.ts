@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { AppService } from './app.service';
+import type { UploadSessionBody } from './app.service';
 
 @Controller()
 export class AppController {
@@ -15,15 +16,16 @@ export class AppController {
     return this.appService.listDocuments();
   }
 
-  @Post('documents')
-  async createDocument(@Body('originalFilename') originalFilename?: string) {
-    const safeFilename = originalFilename?.trim() || 'untitled.csv';
-    return this.appService.createDocument(safeFilename);
+  /** Creates a document row and returns a presigned PUT URL for MinIO/S3. */
+  @Post('documents/upload-session')
+  async createUploadSession(@Body() body: UploadSessionBody) {
+    return this.appService.createUploadSession(body);
   }
 
-  @Post('documents/:id/process')
-  async processDocument(@Param('id') id: string) {
-    return this.appService.enqueueDocument(id);
+  /** After the client PUTs the object, call this to verify it exists and enqueue ingestion. */
+  @Post('documents/:id/complete-upload')
+  async completeUpload(@Param('id') id: string) {
+    return this.appService.completeUpload(id);
   }
 
   @Get('documents/:id/status')

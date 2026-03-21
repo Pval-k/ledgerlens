@@ -8,6 +8,11 @@ describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.S3_ENDPOINT ??= 'http://127.0.0.1:9000';
+    process.env.S3_ACCESS_KEY_ID ??= 'minioadmin';
+    process.env.S3_SECRET_ACCESS_KEY ??= 'minioadmin';
+    process.env.S3_BUCKET ??= 'ledgerlens';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
