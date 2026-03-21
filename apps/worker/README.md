@@ -19,3 +19,14 @@ Planned responsibilities:
 
 Copy env from `apps/api/.env.example` (at least `DATABASE_URL`, `REDIS_URL`, and the `S3_*` variables).
 
+## CSV format (v1)
+
+The worker expects a header row. **Required** columns (any of the listed header aliases):
+
+- **Date:** e.g. `date`, `posted_at`, `transaction_date`
+- **Amount:** e.g. `amount`, `value`
+
+Optional: `description` / `memo`, `category`, `currency` (defaults to `USD`).
+
+See `apps/worker/src/parse-csv.ts` and `docs/sample-transactions.csv`.
+

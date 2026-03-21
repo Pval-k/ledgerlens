@@ -1,11 +1,14 @@
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { bytesToUtf8, parseLedgerCsv } from './parse-csv';
 
 const DOCUMENT_QUEUE_NAME = 'document-processing';
 const INGEST_DOCUMENT_JOB = 'INGEST_DOCUMENT';
+const CREATE_MANY_CHUNK = 2000;
 
 type IngestJobData = {
   documentId: string;
@@ -104,21 +107,45 @@ const worker = new Worker<IngestJobData>(
 
     await prisma.document.update({
       where: { id: documentId },
-      data: { status: 'PROCESSING' },
+      data: { status: 'PROCESSING', ingestError: null },
     });
 
     const bytes = await downloadFromStorage(storageKey);
+    const text = bytesToUtf8(bytes);
     console.log(
       `[worker] downloaded ${bytes.byteLength} bytes for document ${documentId}`,
     );
 
-    // Placeholder until CSV parse → transactions lands here.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const parsed = parseLedgerCsv(text);
 
-    await prisma.document.update({
-      where: { id: documentId },
-      data: { status: 'COMPLETED' },
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({ where: { documentId } });
+
+      for (let i = 0; i < parsed.length; i += CREATE_MANY_CHUNK) {
+        const chunk = parsed.slice(i, i + CREATE_MANY_CHUNK);
+        await tx.transaction.createMany({
+          data: chunk.map((row) => ({
+            id: randomUUID(),
+            documentId,
+            postedAt: row.postedAt,
+            amount: row.amount,
+            currency: row.currency,
+            description: row.description,
+            category: row.category,
+            rowIndex: row.rowIndex,
+          })),
+        });
+      }
+
+      await tx.document.update({
+        where: { id: documentId },
+        data: { status: 'COMPLETED', ingestError: null },
+      });
     });
+
+    console.log(
+      `[worker] stored ${parsed.length} transactions for document ${documentId}`,
+    );
   },
   {
     connection: { url: redisUrl },
@@ -135,9 +162,13 @@ worker.on('completed', (job) => {
 
 worker.on('failed', async (job, err) => {
   if (job?.data?.documentId) {
+    const msg = err instanceof Error ? err.message : String(err);
     await prisma.document.update({
       where: { id: job.data.documentId },
-      data: { status: 'FAILED' },
+      data: {
+        status: 'FAILED',
+        ingestError: msg.slice(0, 8000),
+      },
     });
   }
   console.error('[worker] job failed', err);

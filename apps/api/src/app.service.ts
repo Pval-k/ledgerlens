@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { safeStorageBasename } from './filename.util';
+import type { DocumentWithTransactionCount } from './prisma.service';
 import { PrismaService } from './prisma.service';
 import { QueueService } from './queue.service';
 import { StorageService } from './storage.service';
@@ -112,7 +113,8 @@ export class AppService {
   }
 
   async getDocumentStatus(documentId: string) {
-    const document = await this.prisma.getDocumentById(documentId);
+    const document: DocumentWithTransactionCount | null =
+      await this.prisma.getDocumentByIdWithTransactionCount(documentId);
     if (!document) {
       return { ok: false as const, message: 'Document not found' };
     }
@@ -124,8 +126,37 @@ export class AppService {
       storageKey: document.storageKey,
       contentType: document.contentType,
       sizeBytes: document.sizeBytes,
+      transactionCount: document._count.transactions,
+      ingestError: document.ingestError,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
+    };
+  }
+
+  async listTransactions(
+    documentId: string,
+    query: { page: number; limit: number },
+  ) {
+    const document = await this.prisma.getDocumentById(documentId);
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const [total, items] = await this.prisma.listTransactionsForDocument(
+      documentId,
+      query.page,
+      query.limit,
+    );
+
+    return {
+      documentId,
+      page: query.page,
+      limit: query.limit,
+      total,
+      items: items.map((row) => ({
+        ...row,
+        amount: row.amount.toString(),
+      })),
     };
   }
 }

@@ -40,6 +40,7 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 6 | Redis + BullMQ queue in API; **`INGEST_DOCUMENT`** job |
 | 7 | Worker app pulls jobs, updates `Document.status` (first a **fake sleep**, then real **MinIO download**) |
 | 8 | **Object storage integration:** `Document` gains `storageKey`, optional `contentType`, `sizeBytes`, `sha256`; presigned upload + worker reads file from storage |
+| 9 | **CSV ingestion (Stage 5):** `Transaction` model, worker parses CSV → DB, `ingestError` on failure, `GET /documents/:id/transactions` |
 
 ---
 
@@ -103,6 +104,16 @@ These are **real issues** that showed up while building this repo (or are typica
 
 **Fix in worker:** Treat `storageKey` as optional on the job; fall back to `document.storageKey` from Postgres, and still **reject** if a job supplies a key that does not match the row.
 
+### CSV format and money precision
+
+**What we chose:** `amount` is stored as `Decimal(19,4)` in Postgres via Prisma — avoids floating-point money bugs.
+
+**Parser:** `csv-parse` in the worker; required header aliases include **`date`** and **`amount`** (see `apps/worker/src/parse-csv.ts` for full alias lists). Optional: `description`, `category`, `currency`.
+
+**Large files:** `createMany` is chunked (2000 rows per batch) inside one DB transaction so we stay under Postgres parameter limits.
+
+**Re-runs:** Before insert, the worker **`deleteMany` transactions for that `documentId`** so a retry does not duplicate rows.
+
 ---
 
 ## Historical note: `Document` field list by era
@@ -114,6 +125,11 @@ These are **real issues** that showed up while building this repo (or are typica
 **Era B — object storage fields**
 
 - Everything in Era A, plus `storageKey` (unique), optional `contentType`, `sizeBytes`, `sha256`
+
+**Era C — ingestion outcomes**
+
+- Optional `ingestError` (worker sets on failure, clears on success)
+- New table **`Transaction`** linked to `Document` (`onDelete: Cascade`)
 
 ---
 
@@ -460,11 +476,32 @@ From repo root, run both services.
 
 4) Check status
 
-- `GET /documents/<DOC_ID>/status`
+- `GET /documents/<DOC_ID>/status` (includes `transactionCount`, `ingestError` when set)
+
+5) List transactions
+
+- `GET /documents/<DOC_ID>/transactions?page=1&limit=50`
 
 Expected progression:
 
 `PENDING -> PROCESSING -> COMPLETED`
+
+Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv)
+
+---
+
+## Phase 9 — CSV ingestion (Stage 5)
+
+### What we added
+
+- **`Transaction` model** in Prisma: `postedAt`, `amount` (decimal), `currency`, optional `description` / `category`, `rowIndex`, FK to `Document`.
+- **`ingestError`** on `Document` for human-readable failure messages from the worker.
+- **Worker** (`apps/worker/src/parse-csv.ts` + `index.ts`): UTF-8 decode → `parseLedgerCsv` → transactional `deleteMany` + batched `createMany` → `COMPLETED` or `FAILED` + `ingestError`.
+- **API** — `GET /documents/:id/transactions` with pagination (`page`, `limit` ≤ 100).
+
+### Migration
+
+- `apps/api/prisma/migrations/20260321120000_add_transactions/`
 
 ---
 
@@ -473,14 +510,15 @@ Expected progression:
 Implemented so far:
 
 - Running backend service (NestJS)
-- Postgres schema and migrations via Prisma (documents with object metadata)
+- Postgres schema and migrations via Prisma (documents + **transactions**)
 - Presigned direct-to-**MinIO** upload flow (same pattern will work for **AWS S3**) + completion endpoint
 - Redis-backed queue in API
-- Separate worker process that downloads from object storage
-- Async processing pipeline with status tracking
+- Worker: download from storage → **parse CSV** → persist normalized transactions
+- Read API: **paginated transactions** per document
+- Async processing pipeline with status tracking and **structured ingest errors**
 
 ---
 
 ## Where to add the next chapter
 
-When you ship the next feature (e.g. CSV → `transactions`), add a **new phase** here: what you built, what broke, how you fixed it. Keep MinIO and the old steps in place — progress is **additive**.
+Next natural step: **deterministic analytics** (monthly/category summaries, anomaly flags) and/or **auth** so documents belong to users. Add a **new phase** here when you ship it — progress stays **additive**.

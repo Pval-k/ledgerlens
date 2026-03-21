@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { AppService } from './app.service';
 import type { UploadSessionBody } from './app.service';
 
@@ -31,5 +38,18 @@ export class AppController {
   @Get('documents/:id/status')
   async getDocumentStatus(@Param('id') id: string) {
     return this.appService.getDocumentStatus(id);
+  }
+
+  /** Paginated normalized transactions for a document (newest first). */
+  @Get('documents/:id/transactions')
+  async listTransactions(
+    @Param('id') id: string,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const rawLimit = parseInt(limitStr ?? '50', 10) || 50;
+    const limit = Math.min(100, Math.max(1, rawLimit));
+    return this.appService.listTransactions(id, { page, limit });
   }
 }

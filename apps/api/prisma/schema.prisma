@@ -7,14 +7,35 @@ datasource db {
 }
 
 model Document {
-  id               String   @id @default(uuid())
+  id               String        @id @default(uuid())
   originalFilename String
   /// S3/MinIO object key (set when the upload session is created).
-  storageKey       String   @unique
+  storageKey       String        @unique
   contentType      String?
   sizeBytes        Int?
   sha256           String?
-  status           String   @default("PENDING")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  status           String        @default("PENDING")
+  /// Set when ingestion fails (worker); cleared on success.
+  ingestError      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  transactions     Transaction[]
+}
+
+/// Normalized row from an uploaded file (CSV v1). One document has many transactions.
+model Transaction {
+  id          String   @id @default(uuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  postedAt    DateTime
+  amount      Decimal  @db.Decimal(19, 4)
+  currency    String   @default("USD")
+  description String?
+  category    String?
+  /// 0-based data row index in the source CSV (excluding header).
+  rowIndex    Int
+  createdAt   DateTime @default(now())
+
+  @@index([documentId])
+  @@index([documentId, postedAt])
 }

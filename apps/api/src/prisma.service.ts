@@ -1,6 +1,23 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+
+/** Return shape for status + transaction count (explicit so `ingestError` is always typed). */
+export type DocumentWithTransactionCount = Prisma.DocumentGetPayload<{
+  select: {
+    id: true;
+    originalFilename: true;
+    storageKey: true;
+    contentType: true;
+    sizeBytes: true;
+    sha256: true;
+    status: true;
+    ingestError: true;
+    createdAt: true;
+    updatedAt: true;
+    _count: { select: { transactions: true } };
+  };
+}>;
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
@@ -49,6 +66,53 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     return this.document.findUnique({
       where: { id },
     });
+  }
+
+  getDocumentByIdWithTransactionCount(
+    id: string,
+  ): Promise<DocumentWithTransactionCount | null> {
+    return this.document.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        originalFilename: true,
+        storageKey: true,
+        contentType: true,
+        sizeBytes: true,
+        sha256: true,
+        status: true,
+        ingestError: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { transactions: true } },
+      },
+    });
+  }
+
+  listTransactionsForDocument(
+    documentId: string,
+    page: number,
+    limit: number,
+  ) {
+    const skip = (page - 1) * limit;
+    return this.$transaction([
+      this.transaction.count({ where: { documentId } }),
+      this.transaction.findMany({
+        where: { documentId },
+        orderBy: [{ postedAt: 'desc' }, { rowIndex: 'desc' }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          postedAt: true,
+          amount: true,
+          currency: true,
+          description: true,
+          category: true,
+          rowIndex: true,
+        },
+      }),
+    ]);
   }
 
   updateDocumentStatus(id: string, status: string) {
