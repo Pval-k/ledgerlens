@@ -110,13 +110,13 @@ ledgerlens/
 
 ```mermaid
 flowchart LR
-  Client[Web/Client] --> API[API (NestJS)]
-  API --> PG[(Postgres)]
-  API --> Redis[(Redis/BullMQ)]
-  API --> S3[(S3/MinIO)]
-  Redis --> Worker[Worker]
-  Worker --> PG
-  Worker --> S3
+  A["Web Client"] --> B["API (NestJS)"]
+  B --> C[("Postgres")]
+  B --> D[("Redis / BullMQ")]
+  B --> E[("S3 / MinIO")]
+  D --> F["Worker"]
+  F --> C
+  F --> E
 ```
 
 ## API surface
