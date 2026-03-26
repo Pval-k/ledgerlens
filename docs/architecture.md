@@ -1,33 +1,46 @@
-# Architecture (initial)
+# LedgerLens Architecture
 
-This doc is a living note as we build LedgerLens in stages.
+This doc describes the current runtime architecture. For step-by-step history and decisions, see `docs/progress.md`.
 
-For a **beginner-oriented build diary** (what we built, bugs we hit, how we fixed them, MinIO-first vs future AWS), see [`progress.md`](progress.md).
+## Services
 
-## Services and responsibilities
+- **Web (`apps/web`)**: React UI for auth, upload, dashboard, and document detail views.
+- **API (`apps/api`)**: NestJS REST API for auth, uploads, orchestration, analytics queries, and health/metrics.
+- **Worker (`apps/worker`)**: BullMQ consumer for background ingestion and summary aggregation.
 
-- **Web (`apps/web`)**\n  UI for authentication, document upload, transaction exploration (pagination), dashboards (charts), and later an AI Q&A panel.\n\n- **API (`apps/api`)**\n  Owns authentication/authorization, REST endpoints, document lifecycle, and job orchestration. It is kept responsive by pushing long-running work to the worker.\n\n- **Worker (`apps/worker`)**\n  Owns background processing (parsing, normalization, persistence, aggregation). It pulls work from a queue and updates document status.\n+
 ## Data stores
 
-- **Postgres**\n  System of record for users, documents, transactions, and summary tables.\n\n- **Redis**\n  Job queues (BullMQ) and caching (later).\n\n- **Object storage (S3/MinIO)**\n  Stores uploaded documents. The DB stores *metadata* and a storage key.\n+
-## Document ingestion (high-level)
+- **PostgreSQL**: source of truth for users, documents, refresh sessions, transactions, and summary tables.
+- **Redis**: BullMQ queue backend plus idempotency records.
+- **Object storage (S3-compatible)**: raw uploaded files addressed by `storageKey`.
 
-1. Web calls `POST /documents/upload-session` with filename/metadata; API creates a `document` row (with `storageKey`) and returns a presigned PUT URL.\n2. Browser (or server) PUTs the bytes directly to MinIO/S3 using that URL.\n3. Web calls `POST /documents/:id/complete-upload`; API `HeadObject`s the key, updates `sizeBytes` / `contentType`, and enqueues `INGEST_DOCUMENT` with `{ documentId, storageKey }`.\n4. Worker downloads the object from storage, then parses/validates (CSV first), normalizes rows, and persists transactions.\n5. Worker computes deterministic summaries/anomalies.\n6. Worker updates the `document` status to `COMPLETED` or `FAILED` with error details.\n\nThe API ensures the configured bucket exists on first storage operation (or create `S3_BUCKET` once in the MinIO console).\n+
-## Why async matters here
+## Core flow
 
-Parsing PDFs/CSVs and aggregating large datasets can be slow. Keeping this off the request path improves:\n- user experience (API stays snappy)\n- reliability (retries/backoff)\n- scalability (add more workers)\n+
-## Ingestion flow diagram
+1. Client requests `POST /documents/upload-session`.
+2. API creates a document row + returns presigned PUT URL.
+3. Client uploads file directly to object storage.
+4. Client calls `POST /documents/:id/complete-upload`.
+5. API verifies object metadata, then enqueues `INGEST_DOCUMENT`.
+6. Worker downloads file, parses/normalizes rows, writes transactions.
+7. Worker rebuilds monthly/category summaries and updates document status.
+
+## Security & reliability patterns
+
+- JWT access tokens + refresh session rotation/revocation.
+- User-scoped document and analytics queries.
+- Idempotency on critical write endpoints (`Idempotency-Key`).
+- Structured logs with request IDs.
+- Readiness/metrics endpoints and queue/job instrumentation.
+
+## System diagram
 
 ```mermaid
-flowchart TD
-  Web[WebApp] -->|HTTP| Api[Api]
-  Api --> Db[(Postgres)]
-  Api --> Q[Redis_BullMQ]
-  Q --> Worker[Worker]
-  Worker --> Obj[ObjectStorage]
-  Worker --> Db
+flowchart LR
+  Client[Web/Client] --> API[API (NestJS)]
+  API --> PG[(Postgres)]
+  API --> Redis[(Redis/BullMQ)]
+  API --> S3[(S3/MinIO)]
+  Redis --> Worker[Worker]
+  Worker --> PG
+  Worker --> S3
 ```
-
-## Initial data model sketch (conceptual)
-
-- `users`\n- `documents` (owned by a user; points to object storage; has status)\n- `transactions` (normalized; linked to user + document)\n- `monthly_summaries` and `category_monthly_summaries` (aggregated tables)\n- `anomalies` (deterministic flags over transactions)\n+

@@ -50,11 +50,12 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 16 | **`DELETE /documents/:id`:** removes **`Document`** (cascades transactions + materialized summaries), **`StorageService.deleteObject`** for MinIO/S3 (best-effort if delete fails); web list + detail **Delete** with confirm |
 | 17 | **Auth & multi-tenancy:** **`User`** model, **`Document.userId`**, JWT (**`POST /auth/signup`**, **`/login`**, **`GET /auth/me`**, **`POST /auth/change-password`**), bcrypt, **`JwtAuthGuard`** on documents + analytics; queries scoped by user; **`User.name`** + signup password confirmation |
 | 18 | **Web IA:** public **`/`** landing (sign in / create account); app on **`/dashboard`**; **`/settings`** change password; JWT in **`localStorage`** + **`Authorization: Bearer`**; **`fetchMe`** session hydration |
-| 19 | **Hardening:** **`@nestjs/throttler`**, **`nestjs-pino`** structured logs, **`PrismaClientExceptionFilter`** (clearer errors when DB schema lags migrations), **`docs/E2E.md`** + cross-user isolation e2e |
+| 19 | **Hardening:** **`@nestjs/throttler`**, **`nestjs-pino`** structured logs, **`PrismaClientExceptionFilter`** (clearer errors when DB schema lags migrations), and cross-user isolation e2e |
 | 20 | **Insights stub:** **`GET /documents/:id/insights`** (user-scoped placeholder for future RAG/anomalies); web **Insights** card on document page |
 | 21 | **Idempotency + retry safety:** Redis-backed `IdempotencyService` for **`POST /documents/upload-session`** and **`POST /documents/:id/complete-upload`** (`Idempotency-Key`, replay on retry, conflict on payload mismatch/in-flight) |
 | 22 | **Refresh sessions + revocation model:** `RefreshSession` table, hashed refresh tokens, rotation (`/auth/refresh`), single-session logout (`/auth/logout`), logout-all (`/auth/logout-all`), revoke-all on password change |
 | 23 | **Observability + SLO hooks:** request IDs + structured request latency/status logs, health/readiness/metrics endpoints, worker queue depth + job success/failure/retry/processing-time metrics logs |
+| 24 | **Env + repo hygiene:** canonical `S3_*` env usage in API/worker `.env`, explicit local MinIO defaults + AWS-ready examples in `.env.example`, stronger root ignore rules and docs consolidation (`README` + `architecture` + `progress` + `interview-prep`) |
 
 ---
 
@@ -602,7 +603,7 @@ Sample CSV for testing: [`docs/sample-transactions.csv`](sample-transactions.csv
 
 ### Docs
 
-- See [`docs/repo-layout.md`](repo-layout.md) for the full map.
+- See [`docs/interview-prep.md`](interview-prep.md) for the concise file map and interview-oriented walkthrough.
 
 ---
 
@@ -665,7 +666,7 @@ See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** su
 
 - If **`pnpm exec prisma migrate deploy`** was not run after adding **`User.name`**, signup returned **500** until the migration applied. **`PrismaClientExceptionFilter`** maps **P2022** (missing column) to a JSON message that mentions **`migrate deploy`**.
 
-**Docs:** `apps/api/docs/E2E.md`, `apps/api/docs/HARDENING.md`.
+**Docs:** consolidated in `docs/interview-prep.md` and reflected in this timeline.
 
 ---
 
@@ -728,6 +729,20 @@ See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** su
 
 ---
 
+## Phase 19 — Environment and documentation cleanup
+
+- **Canonical storage env vars** — updated real `apps/api/.env` and `apps/worker/.env` to use `S3_*` keys consistently (`S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`) with MinIO-local defaults.
+- **JWT secret hygiene** — added explicit `JWT_SECRET` in API env for local correctness (instead of relying on fallback secret).
+- **AWS-ready configuration path** — kept implementation S3-compatible; `.env.example` files now show both local MinIO defaults and AWS profile examples without changing code paths.
+- **Repo hygiene** — cleaned root `.gitignore` (dist/cache/editor clutter), removed mixed lockfile artifact, replaced stale scaffold docs with project-specific docs.
+- **Docs consolidation** — removed API-local docs in favor of fewer, richer docs:
+  - root `README.md` (what + stack)
+  - `docs/architecture.md` (runtime design)
+  - `docs/progress.md` (build timeline)
+  - `docs/interview-prep.md` (file-to-file explanation + interview Q&A)
+
+---
+
 ## Current Summary
 
 Implemented so far:
@@ -740,6 +755,7 @@ Implemented so far:
 - **Write safety** — idempotency/replay for upload-session and complete-upload via Redis (`Idempotency-Key`)
 - **Auth lifecycle** — access + refresh tokens, rotation, per-session/device metadata, logout and logout-all revocation
 - **Observability** — request IDs, readiness/metrics endpoints, queue depth and worker job processing metrics logs for incident debugging and SLO tracking
+- **Config readiness** — local MinIO profile works out of the box; AWS S3 profile is environment-switchable (same storage code path)
 - **Redis** queue in API; **worker** ingests CSV → transactions → summaries
 - **Read API** — paginated transactions; monthly + by-category analytics; **`/insights`** stub — all **user-scoped**
 - **Tests** — unit (`health`); e2e optional (needs DB + migrate)
@@ -748,4 +764,4 @@ Implemented so far:
 
 ## Where to add the next chapter
 
-Next natural steps: **replace the insights stub** with real anomaly detection and/or **RAG-backed narratives** on the same user-scoped document data; add **Redis-backed throttler storage** for multi-instance API and expand e2e coverage for refresh rotation/reuse-detection paths (see **`apps/api/docs/HARDENING.md`**). Add a **new phase** here when you ship it — progress stays **additive**.
+Next natural steps: **replace the insights stub** with real anomaly detection and/or **RAG-backed narratives** on the same user-scoped document data; add **Redis-backed throttler storage** for multi-instance API and expand e2e coverage for refresh rotation/reuse-detection paths. Add a **new phase** here when you ship it — progress stays **additive**.

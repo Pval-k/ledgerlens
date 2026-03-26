@@ -1,21 +1,14 @@
 # Worker (`apps/worker`)
 
-This will be the **background worker service**.
-
-Planned responsibilities:
-- consume BullMQ jobs from Redis (e.g., `INGEST_DOCUMENT`)
-- fetch uploaded files from object storage (S3/MinIO)
-- parse and validate (CSV first; PDF later)
-- normalize transactions deterministically
-- persist normalized transactions to Postgres
-- compute deterministic aggregates (monthly/category summaries) and anomalies
-- update document status + failure details with retries/backoff
+Background worker service for asynchronous ingestion and aggregation.
 
 ## Current behavior
 
 - Consumes `INGEST_DOCUMENT` jobs with `{ documentId, storageKey }` (legacy jobs may omit `storageKey`; the worker falls back to the DB row).
 - Downloads the object from MinIO/S3 using the same `S3_*` env vars as the API.
-- Still uses a short sleep as a stand-in for CSV → `transactions` parsing.
+- Parses CSV and writes normalized transactions to Postgres.
+- Rebuilds materialized monthly/category summaries after successful ingest.
+- Emits periodic queue/job metrics logs (queue depth, success/failure/retry counts, avg/max processing time).
 
 Copy env from `apps/api/.env.example` (at least `DATABASE_URL`, `REDIS_URL`, and the `S3_*` variables).
 
