@@ -24,6 +24,17 @@ Users authenticate, upload statement files via presigned object-storage URLs, an
 - **Observability:** Pino (`nestjs-pino`), health/readiness/metrics endpoints, worker queue/job metrics logging
 - **Testing/tooling:** Jest, Supertest (e2e), pnpm workspaces
 
+## Key features
+
+- JWT auth with refresh-token session lifecycle (rotation + revocation)
+- User-isolated data model (multi-tenant boundaries enforced on reads/writes)
+- Direct-to-storage uploads via presigned URLs (API does not proxy file body)
+- Async ingestion pipeline with BullMQ worker
+- CSV normalization with header alias support (date/amount required, category optional)
+- Materialized monthly and category summaries for fast analytics reads
+- Retry safety for critical writes via idempotency keys
+- Health/readiness/metrics endpoints plus worker processing metrics
+
 ## Repository structure
 
 ```text
@@ -36,9 +47,101 @@ ledgerlens/
   README.md
 ```
 
-## Docs to keep
+## How it works (end-to-end)
 
-- [`docs/architecture.md`](docs/architecture.md) — current runtime architecture
+### Authentication flow
+
+1. User signs up or logs in via the web app.
+2. API validates credentials and returns access + refresh tokens.
+3. Protected routes require `Authorization: Bearer <accessToken>`.
+4. Refresh endpoint rotates refresh sessions and issues a new access token.
+5. Logout/logout-all revokes one or all refresh sessions.
+
+### Upload and ingestion flow
+
+1. Frontend calls `POST /documents/upload-session`.
+2. API creates a document row and returns a presigned PUT URL.
+3. Browser uploads CSV directly to S3-compatible storage.
+4. Frontend calls `POST /documents/:id/complete-upload`.
+5. API validates object metadata and enqueues `INGEST_DOCUMENT`.
+6. Worker downloads file, parses CSV, normalizes rows, writes `Transaction` rows.
+7. Worker rebuilds summary tables and marks document state.
+
+### Analytics flow
+
+1. Frontend requests analytics endpoints for a document.
+2. API verifies document ownership for current user.
+3. API reads precomputed monthly/category summary tables.
+4. Frontend renders chart-friendly data without expensive real-time aggregation.
+
+## Runtime architecture
+
+### Services
+
+- **Web (`apps/web`)**: React UI for auth, upload, dashboard, and document detail views
+- **API (`apps/api`)**: NestJS REST API for auth, uploads, orchestration, analytics queries, and health/metrics
+- **Worker (`apps/worker`)**: BullMQ consumer for background ingestion and summary aggregation
+
+### Data stores
+
+- **PostgreSQL**: source of truth for users, documents, refresh sessions, transactions, and summary tables
+- **Redis**: BullMQ queue backend plus idempotency records
+- **Object storage (S3-compatible)**: raw uploaded files addressed by `storageKey`
+
+### Core flow
+
+1. Client requests `POST /documents/upload-session`.
+2. API creates a document row and returns a presigned PUT URL.
+3. Client uploads file directly to object storage.
+4. Client calls `POST /documents/:id/complete-upload`.
+5. API verifies object metadata and enqueues `INGEST_DOCUMENT`.
+6. Worker downloads file, parses/normalizes rows, writes transactions.
+7. Worker rebuilds monthly/category summaries and updates document status.
+
+### Security and reliability patterns
+
+- JWT access tokens + refresh session rotation/revocation
+- User-scoped document and analytics queries
+- Idempotency on critical write endpoints (`Idempotency-Key`)
+- Structured logs with request IDs
+- Readiness/metrics endpoints and queue/job instrumentation
+
+### System diagram
+
+```mermaid
+flowchart LR
+  Client[Web/Client] --> API[API (NestJS)]
+  API --> PG[(Postgres)]
+  API --> Redis[(Redis/BullMQ)]
+  API --> S3[(S3/MinIO)]
+  Redis --> Worker[Worker]
+  Worker --> PG
+  Worker --> S3
+```
+
+## API surface
+
+Current route groups:
+- Auth: signup, login, refresh, logout, me, change-password, logout-all
+- Documents: list, upload-session, complete-upload, status, transactions, delete
+- Analytics: insights (stub), monthly summaries, category summaries
+- Health: root, live, ready, metrics
+
+For the full method/path list with request fields, see:
+- [`docs/interview-13-api-endpoints.md`](docs/interview-13-api-endpoints.md)
+
+## Data model (high level)
+
+Core entities:
+- `User`: account identity and credentials metadata
+- `RefreshSession`: refresh-token session lifecycle and revocation state
+- `Document`: uploaded file metadata and processing status
+- `Transaction`: normalized financial row data
+- `DocumentMonthlySummary`: monthly aggregates by currency
+- `CategoryMonthlySummary`: monthly aggregates by category/currency
+
+## Docs
+
 - [`docs/progress.md`](docs/progress.md) — full build diary and decisions timeline
-- [`docs/interview-prep.md`](docs/interview-prep.md) — detailed file-to-file walkthrough + concepts + interview Q&A + complete endpoint list
+- [`docs/interview-prep.md`](docs/interview-prep.md) — section hub with detailed beginner-friendly deep dives
 
