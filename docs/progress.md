@@ -54,6 +54,7 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 20 | **Insights stub:** **`GET /documents/:id/insights`** (user-scoped placeholder for future RAG/anomalies); web **Insights** card on document page |
 | 21 | **Idempotency + retry safety:** Redis-backed `IdempotencyService` for **`POST /documents/upload-session`** and **`POST /documents/:id/complete-upload`** (`Idempotency-Key`, replay on retry, conflict on payload mismatch/in-flight) |
 | 22 | **Refresh sessions + revocation model:** `RefreshSession` table, hashed refresh tokens, rotation (`/auth/refresh`), single-session logout (`/auth/logout`), logout-all (`/auth/logout-all`), revoke-all on password change |
+| 23 | **Observability + SLO hooks:** request IDs + structured request latency/status logs, health/readiness/metrics endpoints, worker queue depth + job success/failure/retry/processing-time metrics logs |
 
 ---
 
@@ -711,6 +712,22 @@ See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** su
 
 ---
 
+## Phase 18 — Observability + SLO metrics hooks
+
+- **API request observability** — `nestjs-pino` now emits consistent request IDs (`x-request-id`) and structured status/latency logs.
+- **Health/readiness** — added:
+  - `GET /health/live` (liveness)
+  - `GET /health/ready` (DB + queue reachability checks)
+  - `GET /health/metrics` (process memory/uptime + queue counts snapshot)
+- **Queue observability in API** — `QueueService.getQueueMetrics()` wraps BullMQ counts (`waiting`, `active`, `completed`, `failed`, `delayed`, `paused`).
+- **Worker metrics logging** — every 30s worker logs queue depth + counters:
+  - jobs processed / succeeded / failed / retried
+  - average and max processing duration
+  - per-job completion duration and attempt count
+- Verification: API build + tests pass; worker TypeScript build passes.
+
+---
+
 ## Current Summary
 
 Implemented so far:
@@ -722,6 +739,7 @@ Implemented so far:
 - **Presigned MinIO/S3** upload + complete-upload + worker pipeline unchanged; all new documents tied to authenticated **`userId`**
 - **Write safety** — idempotency/replay for upload-session and complete-upload via Redis (`Idempotency-Key`)
 - **Auth lifecycle** — access + refresh tokens, rotation, per-session/device metadata, logout and logout-all revocation
+- **Observability** — request IDs, readiness/metrics endpoints, queue depth and worker job processing metrics logs for incident debugging and SLO tracking
 - **Redis** queue in API; **worker** ingests CSV → transactions → summaries
 - **Read API** — paginated transactions; monthly + by-category analytics; **`/insights`** stub — all **user-scoped**
 - **Tests** — unit (`health`); e2e optional (needs DB + migrate)

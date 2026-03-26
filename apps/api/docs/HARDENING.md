@@ -7,6 +7,7 @@
 - **Prisma errors** — `PrismaClientExceptionFilter` maps known `PrismaClientKnownRequestError` codes (e.g. **P2022** missing column) to JSON responses that hint running `pnpm exec prisma migrate deploy` from `apps/api` when the DB lags the schema.
 - **Idempotency on document writes** — `Idempotency-Key` support for `POST /documents/upload-session` and `POST /documents/:id/complete-upload` using Redis (`SET NX EX`) with replay-safe response storage; mismatched payload/key and in-flight collisions return `409`.
 - **Refresh lifecycle + revocation** — `RefreshSession` table with hashed refresh tokens, rotation on `POST /auth/refresh`, single-session revoke (`POST /auth/logout`), bulk revoke (`POST /auth/logout-all`), and revoke-all on password change.
+- **Observability hooks** — request IDs + latency/status structured logs (`nestjs-pino`), API readiness/metrics endpoints (`GET /health/live`, `/health/ready`, `/health/metrics`), and worker queue/job metrics logging (counts, retries, avg/max processing time every 30s).
 
 ## E2E
 

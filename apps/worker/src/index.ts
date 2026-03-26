@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Prisma } from '@prisma/client';
-import { Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { rebuildDocumentSummaries } from './aggregate-summaries';
@@ -189,16 +189,72 @@ const worker = new Worker<IngestJobData>(
     connection: { url: redisUrl },
   },
 );
+const queueMetrics = new Queue(DOCUMENT_QUEUE_NAME, {
+  connection: { url: redisUrl },
+});
+
+const metrics = {
+  processed: 0,
+  succeeded: 0,
+  failed: 0,
+  retried: 0,
+  totalProcessingMs: 0,
+  maxProcessingMs: 0,
+};
+
+function avgProcessingMs(): number {
+  if (metrics.succeeded === 0) return 0;
+  return Math.round(metrics.totalProcessingMs / metrics.succeeded);
+}
+
+async function logQueueMetrics() {
+  const counts = await queueMetrics.getJobCounts(
+    'waiting',
+    'active',
+    'completed',
+    'failed',
+    'delayed',
+    'paused',
+  );
+  console.log('[worker][metrics]', {
+    queue: DOCUMENT_QUEUE_NAME,
+    counts,
+    processed: metrics.processed,
+    succeeded: metrics.succeeded,
+    failed: metrics.failed,
+    retried: metrics.retried,
+    avgProcessingMs: avgProcessingMs(),
+    maxProcessingMs: metrics.maxProcessingMs,
+  });
+}
 
 worker.on('ready', () => {
   console.log('[worker] connected and ready');
 });
 
 worker.on('completed', (job) => {
-  console.log(`[worker] completed job ${job.id}`);
+  metrics.processed += 1;
+  metrics.succeeded += 1;
+  const start = job.processedOn ?? job.timestamp;
+  const end = job.finishedOn ?? Date.now();
+  const durationMs = Math.max(0, end - start);
+  metrics.totalProcessingMs += durationMs;
+  metrics.maxProcessingMs = Math.max(metrics.maxProcessingMs, durationMs);
+  if (job.attemptsMade > 1) {
+    metrics.retried += 1;
+  }
+  console.log(`[worker] completed job ${job.id}`, {
+    durationMs,
+    attemptsMade: job.attemptsMade,
+  });
 });
 
 worker.on('failed', async (job, err) => {
+  metrics.processed += 1;
+  metrics.failed += 1;
+  if (job && job.attemptsMade > 1) {
+    metrics.retried += 1;
+  }
   if (job?.data?.documentId) {
     const msg = err instanceof Error ? err.message : String(err);
     await prisma.document.update({
@@ -211,3 +267,9 @@ worker.on('failed', async (job, err) => {
   }
   console.error('[worker] job failed', err);
 });
+
+setInterval(() => {
+  void logQueueMetrics().catch((err) => {
+    console.error('[worker] failed to emit metrics', err);
+  });
+}, 30_000);

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { randomUUID } from 'node:crypto';
 import { LoggerModule } from 'nestjs-pino';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +20,23 @@ const isProd = process.env.NODE_ENV === 'production';
     LoggerModule.forRoot({
       pinoHttp: {
         level: isTest ? 'silent' : isProd ? 'info' : 'debug',
+        genReqId: (req, res) => {
+          const fromHeader = req.headers['x-request-id'];
+          const id =
+            typeof fromHeader === 'string' && fromHeader.trim() !== ''
+              ? fromHeader.trim()
+              : randomUUID();
+          res.setHeader('x-request-id', id);
+          return id;
+        },
+        customSuccessMessage: (req, res) =>
+          `${req.method} ${req.url} -> ${res.statusCode}`,
+        customErrorMessage: (req, res, err) =>
+          `${req.method} ${req.url} -> ${res.statusCode} (${err.message})`,
+        customProps: (req, res) => ({
+          requestId: req.id,
+          statusCode: res.statusCode,
+        }),
         ...(isTest || isProd
           ? {}
           : {

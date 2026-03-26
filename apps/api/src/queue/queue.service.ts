@@ -30,4 +30,19 @@ export class QueueService implements OnModuleInit {
       },
     );
   }
+
+  async getQueueMetrics() {
+    const counts = await this.queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused',
+    );
+    return {
+      queueName: DOCUMENT_QUEUE_NAME,
+      ...counts,
+    };
+  }
 }
