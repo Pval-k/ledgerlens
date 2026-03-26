@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -31,8 +32,13 @@ export class DocumentsController {
   async createUploadSession(
     @CurrentUser() user: AuthUser,
     @Body() body: UploadSessionBody,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.documentsService.createUploadSession(user.userId, body);
+    return this.documentsService.createUploadSession(
+      user.userId,
+      body,
+      idempotencyKey,
+    );
   }
 
   /** After the client PUTs the object, call this to verify it exists and enqueue ingestion. */
@@ -40,8 +46,9 @@ export class DocumentsController {
   async completeUpload(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.documentsService.completeUpload(user.userId, id);
+    return this.documentsService.completeUpload(user.userId, id, idempotencyKey);
   }
 
   @Get('documents/:id/status')
