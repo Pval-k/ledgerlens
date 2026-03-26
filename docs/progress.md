@@ -52,6 +52,8 @@ It is meant for **beginners**: names of tools, files, and concepts are spelled o
 | 18 | **Web IA:** public **`/`** landing (sign in / create account); app on **`/dashboard`**; **`/settings`** change password; JWT in **`localStorage`** + **`Authorization: Bearer`**; **`fetchMe`** session hydration |
 | 19 | **Hardening:** **`@nestjs/throttler`**, **`nestjs-pino`** structured logs, **`PrismaClientExceptionFilter`** (clearer errors when DB schema lags migrations), **`docs/E2E.md`** + cross-user isolation e2e |
 | 20 | **Insights stub:** **`GET /documents/:id/insights`** (user-scoped placeholder for future RAG/anomalies); web **Insights** card on document page |
+| 21 | **Idempotency + retry safety:** Redis-backed `IdempotencyService` for **`POST /documents/upload-session`** and **`POST /documents/:id/complete-upload`** (`Idempotency-Key`, replay on retry, conflict on payload mismatch/in-flight) |
+| 22 | **Refresh sessions + revocation model:** `RefreshSession` table, hashed refresh tokens, rotation (`/auth/refresh`), single-session logout (`/auth/logout`), logout-all (`/auth/logout-all`), revoke-all on password change |
 
 ---
 
@@ -681,6 +683,34 @@ See the **Monorepo + pnpm: IDE says “Cannot find module '@nestjs/core'”** su
 
 ---
 
+## Phase 16 — Idempotency + retry safety (write APIs)
+
+- Added **`IdempotencyService`** (`apps/api/src/idempotency/`) using Redis records with TTL.
+- `POST /documents/upload-session` and `POST /documents/:id/complete-upload` now accept optional **`Idempotency-Key`**.
+- Behavior:
+  - same key + same fingerprint ⇒ replay saved response (safe retries)
+  - same key + different fingerprint ⇒ **409 Conflict**
+  - same key while request is in-flight ⇒ **409 Conflict**
+- Fingerprints include user scope + normalized payload (upload-session) or user+document (complete-upload).
+- Build/lint verification passed after integration.
+
+---
+
+## Phase 17 — Refresh token lifecycle + revocation
+
+- Added Prisma **`RefreshSession`** model (`userId`, token hash, expiry, revoke timestamp, rotation linkage, device/ip/UA metadata).
+- Added migration: `20260322200000_add_refresh_sessions`.
+- Auth endpoints now include:
+  - **`POST /auth/refresh`** (rotates refresh token; revokes old session)
+  - **`POST /auth/logout`** (revoke one refresh token)
+  - **`POST /auth/logout-all`** (revoke all active sessions for user)
+- `signup` / `login` now issue `{ accessToken, refreshToken, session }`.
+- `change-password` now revokes all active refresh sessions.
+- Refresh tokens are stored as **hashes** (`sha256` + pepper), not raw values.
+- Config knobs (optional, with safe defaults): `REFRESH_TOKEN_TTL_MS`, `REFRESH_TOKEN_PEPPER`.
+
+---
+
 ## Current Summary
 
 Implemented so far:
@@ -688,8 +718,10 @@ Implemented so far:
 - **Web UI** (`apps/web`): Vite + React — **landing**, **auth flows**, **dashboard** (upload + list), **settings** (password), document view with charts + transactions + insights stub; **dev proxy** (`/api` → Nest on port 3000) for reliable local API calls
 - **Tooling:** pnpm **`public-hoist-pattern`** for **`@nestjs/*`**, **`.vscode/settings.json`** **`typescript.tsdk`**, and **restart TS server** after install so the IDE matches **`nest build`**
 - **NestJS** — feature modules: **`health`**, **`auth`**, **`documents`**, **`analytics`**, **`prisma`**, **`queue`**, **`storage`**; global **`ValidationPipe`**, **`PrismaClientExceptionFilter`**, throttler + pino in **`AppModule`** / **`main.ts`**
-- **Postgres + Prisma** — users, documents (per-user), transactions, materialized summaries; migrations under **`apps/api/prisma/migrations/`**
+- **Postgres + Prisma** — users, documents (per-user), transactions, materialized summaries, refresh sessions; migrations under **`apps/api/prisma/migrations/`**
 - **Presigned MinIO/S3** upload + complete-upload + worker pipeline unchanged; all new documents tied to authenticated **`userId`**
+- **Write safety** — idempotency/replay for upload-session and complete-upload via Redis (`Idempotency-Key`)
+- **Auth lifecycle** — access + refresh tokens, rotation, per-session/device metadata, logout and logout-all revocation
 - **Redis** queue in API; **worker** ingests CSV → transactions → summaries
 - **Read API** — paginated transactions; monthly + by-category analytics; **`/insights`** stub — all **user-scoped**
 - **Tests** — unit (`health`); e2e optional (needs DB + migrate)
@@ -698,4 +730,4 @@ Implemented so far:
 
 ## Where to add the next chapter
 
-Next natural steps: **replace the insights stub** with real anomaly detection and/or **RAG-backed narratives** on the same user-scoped document data; **idempotency** + **Redis-backed rate limits** for multi-instance API (see **`apps/api/docs/HARDENING.md`**). Add a **new phase** here when you ship it — progress stays **additive**.
+Next natural steps: **replace the insights stub** with real anomaly detection and/or **RAG-backed narratives** on the same user-scoped document data; add **Redis-backed throttler storage** for multi-instance API and expand e2e coverage for refresh rotation/reuse-detection paths (see **`apps/api/docs/HARDENING.md`**). Add a **new phase** here when you ship it — progress stays **additive**.
