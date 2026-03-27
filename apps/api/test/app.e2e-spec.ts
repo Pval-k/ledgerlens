@@ -141,8 +141,20 @@ describe('App (e2e)', () => {
       .expect(404);
 
     await request(app.getHttpServer())
+      .get(`/documents/${doc.id}/download-url`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(404);
+
+    await request(app.getHttpServer())
       .get(`/documents/${doc.id}/status`)
       .set('Authorization', `Bearer ${tokenA}`)
       .expect(200);
+
+    const dl = await request(app.getHttpServer())
+      .get(`/documents/${doc.id}/download-url`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .expect(200);
+    expect(dl.body.url).toContain('http');
+    expect(dl.body.filename).toBe('e2e.csv');
   });
 });

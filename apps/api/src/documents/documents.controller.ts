@@ -59,6 +59,15 @@ export class DocumentsController {
     return this.documentsService.getDocumentStatus(user.userId, id);
   }
 
+  /** Presigned GET URL to open or download the original uploaded file from object storage. */
+  @Get('documents/:id/download-url')
+  getDocumentDownloadUrl(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.documentsService.getDocumentDownloadUrl(user.userId, id);
+  }
+
   /** Deletes the document, related DB rows (cascade), and the stored object (best-effort). */
   @Delete('documents/:id')
   @HttpCode(HttpStatus.NO_CONTENT)

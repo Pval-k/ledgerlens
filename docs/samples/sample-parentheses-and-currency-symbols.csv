@@ -1,0 +1,5 @@
+date,amount,description,category,currency
+2024-03-01,"45.99",Coffee,Beverages,USD
+2024-03-02,"(1,250.00)",Rent payment,Housing,USD
+2024-03-03,"$88.40",Gas,Transport,USD
+2024-03-04,"(12.50)",Late fee,Bank fees,USD

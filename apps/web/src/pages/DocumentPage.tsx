@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import {
   deleteDocument,
+  getDocumentDownloadUrl,
   getDocumentInsights,
   getDocumentStatus,
   listCategoryAnalytics,
@@ -98,7 +99,28 @@ export function DocumentPage() {
   const [analyticsErr, setAnalyticsErr] = useState<string | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sourceErr, setSourceErr] = useState<string | null>(null);
+  const [sourceOpening, setSourceOpening] = useState(false);
   const txLimit = 25;
+
+  const displayFilename =
+    status?.originalFilename?.trim() ||
+    titleName ||
+    (status ? `${status.documentId.slice(0, 8)}…` : '');
+
+  async function openOriginalFile() {
+    if (!id) return;
+    setSourceErr(null);
+    setSourceOpening(true);
+    try {
+      const { url } = await getDocumentDownloadUrl(id);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setSourceErr(e instanceof Error ? e.message : 'Could not open file');
+    } finally {
+      setSourceOpening(false);
+    }
+  }
 
   async function onDeleteDocument() {
     if (!window.confirm('Delete this document? This cannot be undone.')) {
@@ -237,14 +259,20 @@ export function DocumentPage() {
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h1 style={{ fontSize: '1.25rem' }}>
-              {titleName ?? `${status.documentId.slice(0, 8)}…`}
-            </h1>
+            <h1 style={{ fontSize: '1.25rem' }}>{displayFilename}</h1>
             <p className="muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
               Updated {fmtDate(status.updatedAt)}
             </p>
           </div>
           <div className="row" style={{ gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={sourceOpening}
+              onClick={() => void openOriginalFile()}
+            >
+              {sourceOpening ? 'Opening…' : 'View original CSV'}
+            </button>
             <button
               type="button"
               className="btn btn-danger-ghost"
@@ -259,6 +287,11 @@ export function DocumentPage() {
         {deleteErr ? (
           <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
             {deleteErr}
+          </div>
+        ) : null}
+        {sourceErr ? (
+          <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
+            {sourceErr}
           </div>
         ) : null}
         {status.ingestError ? (

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -111,6 +112,34 @@ export class StorageService {
     });
 
     return { uploadUrl, expiresIn: options?.expiresInSeconds ?? expiresIn };
+  }
+
+  /** Short-lived presigned GET for viewing or downloading the uploaded object in the browser. */
+  async presignedGetUrl(
+    storageKey: string,
+    options?: {
+      downloadFilename?: string;
+      expiresInSeconds?: number;
+      /** If true, suggest download; if false (default), open inline in browser when possible. */
+      attachment?: boolean;
+    },
+  ): Promise<{ url: string; expiresIn: number }> {
+    await this.ensureBucket();
+    const expiresIn = Math.min(
+      Math.max(Number(options?.expiresInSeconds ?? 900) || 900, 60),
+      3600,
+    );
+    const safeName = (options?.downloadFilename ?? 'document.csv')
+      .replace(/[^\w.\- ()[\]]/g, '_')
+      .slice(0, 180);
+    const disp = options?.attachment ? 'attachment' : 'inline';
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: storageKey,
+      ResponseContentDisposition: `${disp}; filename="${safeName}"`,
+    });
+    const url = await getSignedUrl(this.client, command, { expiresIn });
+    return { url, expiresIn };
   }
 
   async headObject(storageKey: string): Promise<ObjectHeadResult> {

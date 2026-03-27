@@ -1,0 +1,4 @@
+transaction_date,amount,details,type,currency
+2024-08-01T00:00:00.000Z,-22.50,Streaming,Entertainment,USD
+2024-08-02T14:30:00.000Z,-100.00,Transfer to savings,Transfer,USD
+2024-08-03T09:15:00Z,2750.00,Payroll net,Income,USD

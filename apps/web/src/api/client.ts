@@ -47,6 +47,7 @@ export type UploadSessionResponse = {
 export type DocumentStatusOk = {
   ok: true;
   documentId: string;
+  originalFilename: string;
   status: string;
   storageKey: string;
   contentType: string | null;
@@ -255,6 +256,21 @@ export async function getDocumentStatus(
   documentId: string,
 ): Promise<DocumentStatusOk> {
   return json<DocumentStatusOk>(`/documents/${documentId}/status`);
+}
+
+export type DocumentDownloadUrlResponse = {
+  url: string;
+  expiresIn: number;
+  filename: string;
+};
+
+/** Presigned GET to open or download the original upload in a new tab. */
+export async function getDocumentDownloadUrl(
+  documentId: string,
+): Promise<DocumentDownloadUrlResponse> {
+  return json<DocumentDownloadUrlResponse>(
+    `/documents/${documentId}/download-url`,
+  );
 }
 
 export async function listTransactions(

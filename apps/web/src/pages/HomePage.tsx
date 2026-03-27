@@ -9,12 +9,25 @@ import {
   type DocumentRow,
 } from '../api/client';
 
+function isLikelyCsv(file: File): boolean {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.csv')) return true;
+  return file.type === 'text/csv' || file.type === 'application/csv';
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocumentRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(
+    null,
+  );
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -31,27 +44,77 @@ export function HomePage() {
     void refresh();
   }, [refresh]);
 
-  async function onFile(file: File) {
-    setUploadError(null);
-    setUploading(true);
-    try {
-      const session = await createUploadSession({
-        originalFilename: file.name,
-        contentType: file.type || 'text/csv',
-        sizeBytes: file.size,
-      });
-      await putUpload(session.uploadUrl, file, session.headers);
-      await completeUpload(session.documentId);
-      await refresh();
-      navigate(`/documents/${session.documentId}`, {
-        state: { filename: file.name },
-      });
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  }
+  const processFiles = useCallback(
+    async (fileList: File[]) => {
+      const files = fileList.filter(isLikelyCsv);
+      if (files.length === 0) {
+        setUploadError('No CSV files in that selection.');
+        setUploadSuccessMessage(null);
+        return;
+      }
+
+      setUploadError(null);
+      setUploadSuccessMessage(null);
+      setUploading(true);
+      setUploadProgress({ current: 0, total: files.length });
+
+      const errors: string[] = [];
+      let successCount = 0;
+      let singleOk: { documentId: string; filename: string } | null = null;
+
+      try {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]!;
+          setUploadProgress({ current: i + 1, total: files.length });
+          try {
+            const session = await createUploadSession({
+              originalFilename: file.name,
+              contentType: file.type || 'text/csv',
+              sizeBytes: file.size,
+            });
+            await putUpload(session.uploadUrl, file, session.headers);
+            await completeUpload(session.documentId);
+            successCount += 1;
+            singleOk = { documentId: session.documentId, filename: file.name };
+          } catch (e) {
+            errors.push(
+              `${file.name}: ${e instanceof Error ? e.message : 'Upload failed'}`,
+            );
+          }
+        }
+
+        await refresh();
+      } finally {
+        setUploadProgress(null);
+        setUploading(false);
+      }
+
+      const onlyOne = files.length === 1;
+
+      if (onlyOne && successCount === 1 && singleOk) {
+        navigate(`/documents/${singleOk.documentId}`, {
+          state: { filename: singleOk.filename },
+        });
+        return;
+      }
+
+      if (successCount === files.length) {
+        setUploadSuccessMessage(
+          files.length === 1
+            ? 'Upload complete.'
+            : `Uploaded ${successCount} files. Open them in the list below; ingestion runs in the worker for each.`,
+        );
+      } else if (successCount > 0) {
+        setUploadSuccessMessage(
+          `${successCount} of ${files.length} uploaded. See errors below.`,
+        );
+        setUploadError(errors.join('\n'));
+      } else {
+        setUploadError(errors.join('\n'));
+      }
+    },
+    [navigate, refresh],
+  );
 
   async function onDeleteDoc(doc: DocumentRow) {
     if (
@@ -77,34 +140,65 @@ export function HomePage() {
     <div className="stack">
       <div className="card">
         <h2 className="card__title">Upload CSV</h2>
-        <p className="muted" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Presigned upload to storage, then ingestion runs in the worker. You’ll land
-          on the document when processing finishes.
+        <p className="card__lede muted">
+          Presigned upload to storage, then ingestion runs in the worker. Select
+          one or more CSV files (multi-select or drag several). With a single
+          file, you’ll jump to that document when the upload step finishes.
         </p>
-        <label className="dropzone" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+        <label
+          className="dropzone"
+          style={{ cursor: uploading ? 'wait' : 'pointer' }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (uploading) return;
+            const dropped = Array.from(e.dataTransfer.files);
+            if (dropped.length) void processFiles(dropped);
+          }}
+        >
           <input
             type="file"
             accept=".csv,text/csv"
+            multiple
             disabled={uploading}
             onChange={(ev) => {
-              const f = ev.target.files?.[0];
+              // Snapshot before clearing: resetting value empties the live FileList in browsers.
+              const files = ev.target.files?.length
+                ? Array.from(ev.target.files)
+                : [];
               ev.target.value = '';
-              if (f) void onFile(f);
+              if (files.length) void processFiles(files);
             }}
           />
           {uploading ? (
-            <span>Uploading…</span>
+            <span>
+              {uploadProgress
+                ? `Uploading file ${uploadProgress.current} of ${uploadProgress.total}…`
+                : 'Uploading…'}
+            </span>
           ) : (
             <>
-              <strong>Choose a CSV</strong>
+              <strong>Choose CSV file(s)</strong>
               <div className="muted" style={{ marginTop: '0.35rem' }}>
-                or drag & drop (browser: click to pick a file)
+                or drag & drop — multiple files supported
               </div>
             </>
           )}
         </label>
+        {uploadSuccessMessage ? (
+          <div className="alert alert-success" style={{ marginTop: '0.75rem' }}>
+            {uploadSuccessMessage}
+          </div>
+        ) : null}
         {uploadError ? (
-          <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
+          <div
+            className="alert alert-error alert-error--multiline"
+            style={{ marginTop: '0.75rem' }}
+          >
             {uploadError}
           </div>
         ) : null}

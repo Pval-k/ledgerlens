@@ -1,0 +1,60 @@
+# Local infrastructure for LedgerLens (Postgres, Redis, MinIO).
+# Run API, worker, and web on the host with pnpm — see README.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose ps
+#   docker compose down        # stops containers; data persists in volumes
+#   docker compose down -v     # also removes volumes (fresh DB / bucket metadata)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ledgerlens-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ledgerlens
+    volumes:
+      - ledgerlens_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U user -d ledgerlens']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ledgerlens-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - ledgerlens_redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: ledgerlens-minio
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ledgerlens_miniodata:/data
+
+volumes:
+  ledgerlens_pgdata:
+  ledgerlens_redisdata:
+  ledgerlens_miniodata:

@@ -1,0 +1,37 @@
+date,amount,description,category,currency
+2024-01-02,-12.40,Cafe,Food,USD
+2024-01-05,-55.00,Gas,Transport,USD
+2024-01-08,2800.00,Payroll,Income,USD
+2024-01-10,-120.00,Electric,Bills,USD
+2024-01-14,-34.20,Takeout,Food,USD
+2024-01-18,-19.99,Software sub,Subscriptions,USD
+2024-01-22,-220.00,Car insurance,Insurance,USD
+2024-01-25,-48.50,Groceries,Groceries,USD
+2024-02-01,-11.00,Coffee,Food,USD
+2024-02-03,-90.00,Phone,Bills,USD
+2024-02-07,2800.00,Payroll,Income,USD
+2024-02-12,-175.00,Childcare,Family,USD
+2024-02-15,-62.00,Restaurant,Food,USD
+2024-02-20,-28.00,Pharmacy,Health,USD
+2024-02-26,-400.00,Rent portion,Housing,USD
+2024-03-01,-15.50,Lunch,Food,USD
+2024-03-04,-70.00,Transit pass,Transport,USD
+2024-03-08,1400.00,Freelance partial,Income,USD
+2024-03-11,-99.00,Internet,Bills,USD
+2024-03-14,-44.00,Books,Education,USD
+2024-03-19,-250.00,Travel weekend,Travel,USD
+2024-03-25,-38.00,Clothing,Shopping,USD
+2024-04-02,-22.00,Gym,Wellness,USD
+2024-04-06,2800.00,Payroll,Income,USD
+2024-04-09,-150.00,Dentist,Health,USD
+2024-04-13,-58.30,Groceries,Groceries,USD
+2024-04-17,-8.50,Tolls,Transport,USD
+2024-04-21,-120.00,Home repair,Home,USD
+2024-04-28,-14.00,Movies,Entertainment,USD
+2024-05-03,-65.00,Farmers market,Food,USD
+2024-05-07,500.00,Bonus,Income,USD
+2024-05-10,-200.00,Credit card payment,Transfer,USD
+2024-05-15,-42.00,Hardware store,Home,USD
+2024-05-20,-31.00,Streaming,Entertainment,USD
+2024-05-24,-88.00,Fuel,Transport,USD
+2024-05-29,-95.00,Utilities,Bills,USD

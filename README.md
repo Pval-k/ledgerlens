@@ -23,6 +23,7 @@ Users authenticate, upload statement files via presigned object-storage URLs, an
 - **Frontend:** React 18, TypeScript, Vite, React Router, Recharts
 - **Observability:** Pino (`nestjs-pino`), health/readiness/metrics endpoints, worker queue/job metrics logging
 - **Testing/tooling:** Jest, Supertest (e2e), pnpm workspaces
+- **Local infra:** Docker Compose (`docker-compose.yml`) for Postgres, Redis, and MinIO
 
 ## Key features
 
@@ -44,8 +45,34 @@ ledgerlens/
     worker/
     web/
   docs/
+  docker-compose.yml
   README.md
 ```
+
+## Local dependencies (Docker Compose)
+
+Postgres, Redis, and MinIO for development match the defaults in `apps/api/.env.example` and `apps/worker/.env.example`.
+
+```bash
+docker compose up -d
+```
+
+| Service    | Host port | Notes |
+|------------|-----------|--------|
+| PostgreSQL | 5432      | `user` / `password`, database `ledgerlens` |
+| Redis      | 6379      | No password (dev only) |
+| MinIO API  | 9000      | `minioadmin` / `minioadmin`; console at http://localhost:9001 |
+
+Then run migrations and start the apps on the host (API, worker, web):
+
+```bash
+pnpm --filter @ledgerlens/api exec prisma migrate deploy
+pnpm dev:api    # or start:dev per app
+pnpm dev:worker
+pnpm dev:web
+```
+
+The API creates the `ledgerlens` bucket on first use when MinIO is empty. Tear down containers with `docker compose down`; add `-v` to drop data volumes.
 
 ## How it works (end-to-end)
 

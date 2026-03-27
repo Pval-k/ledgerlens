@@ -169,6 +169,7 @@ export class DocumentsService {
     return {
       ok: true as const,
       documentId: document.id,
+      originalFilename: document.originalFilename,
       status: document.status,
       storageKey: document.storageKey,
       contentType: document.contentType,
@@ -177,6 +178,27 @@ export class DocumentsService {
       ingestError: document.ingestError,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
+    };
+  }
+
+  async getDocumentDownloadUrl(userId: string, documentId: string) {
+    const document = await this.prisma.findDocumentForUser(
+      documentId,
+      userId,
+    );
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    const { url, expiresIn } = await this.storage.presignedGetUrl(
+      document.storageKey,
+      {
+        downloadFilename: document.originalFilename || 'document.csv',
+      },
+    );
+    return {
+      url,
+      expiresIn,
+      filename: document.originalFilename ?? 'document.csv',
     };
   }
 
