@@ -2,6 +2,27 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 
+/**
+ * Static USD rates per 1 unit of foreign currency (display / rollup only).
+ * When a document uses more than one currency, amounts are converted with this
+ * table so month and category charts are on one scale (USD).
+ */
+const USD_PER_UNIT: Record<string, number> = {
+  USD: 1,
+  GBP: 1.26,
+  EUR: 1.08,
+  CAD: 0.74,
+  AUD: 0.66,
+  CHF: 1.12,
+  JPY: 0.0067,
+};
+
+function usdPerUnit(code: string): Prisma.Decimal {
+  const key = code.trim().toUpperCase();
+  const n = USD_PER_UNIT[key];
+  return new Prisma.Decimal(n === undefined ? 1 : n);
+}
+
 export function yearMonthUtc(d: Date): string {
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth() + 1;
@@ -63,25 +84,35 @@ export async function rebuildDocumentSummaries(
     return;
   }
 
+  const distinctCurrencies = new Set(
+    rows.map((r) => (r.currency?.trim() || 'USD').toUpperCase()),
+  );
+  const normalizeToUsd = distinctCurrencies.size > 1;
+  const summaryCurrency = normalizeToUsd ? 'USD' : [...distinctCurrencies][0]!;
+
   const monthly = new Map<string, Agg>();
   const byCategory = new Map<string, Agg>();
 
   for (const row of rows) {
     const ym = yearMonthUtc(row.postedAt);
-    const cur = row.currency?.trim() || 'USD';
+    const curRaw = row.currency?.trim() || 'USD';
+    const cur = curRaw.toUpperCase();
     const catKey = row.category?.trim() ?? '';
-    const amt = new Prisma.Decimal(row.amount);
+    let amt = new Prisma.Decimal(row.amount);
+    if (normalizeToUsd) {
+      amt = amt.mul(usdPerUnit(cur));
+    }
 
-    const mkMonth = `${ym}|${cur}`;
-    const mkCat = `${ym}|${cur}|${catKey}`;
+    const mkMonth = `${ym}|${summaryCurrency}`;
+    const mkCat = `${ym}|${summaryCurrency}|${catKey}`;
 
     monthly.set(
       mkMonth,
-      addToAgg(monthly.get(mkMonth) ?? zeroAgg(cur), amt),
+      addToAgg(monthly.get(mkMonth) ?? zeroAgg(summaryCurrency), amt),
     );
     byCategory.set(
       mkCat,
-      addToAgg(byCategory.get(mkCat) ?? zeroAgg(cur), amt),
+      addToAgg(byCategory.get(mkCat) ?? zeroAgg(summaryCurrency), amt),
     );
   }
 

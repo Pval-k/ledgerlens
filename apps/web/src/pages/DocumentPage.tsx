@@ -13,14 +13,14 @@ import {
 import {
   deleteDocument,
   getDocumentDownloadUrl,
-  getDocumentInsights,
+  // getDocumentInsights,
   getDocumentStatus,
   listCategoryAnalytics,
   listMonthlyAnalytics,
   listTransactions,
   type CategorySummaryRow,
   type DocumentStatusOk,
-  type InsightsResponse,
+  // type InsightsResponse,
   type Paged,
   type SummaryRow,
   type TransactionsPage,
@@ -78,7 +78,27 @@ function aggregateCategoryExpense(rows: CategorySummaryRow[]) {
   }
   return [...map.entries()]
     .map(([name, v]) => ({ name, ...v }))
+    .filter((a) => a.expense > 0)
     .sort((a, b) => b.expense - a.expense)
+    .slice(0, 14);
+}
+
+function aggregateCategoryIncome(rows: CategorySummaryRow[]) {
+  const map = new Map<string, { income: number; currency: string }>();
+  for (const r of rows) {
+    const label = r.categoryKey === '' ? '(uncategorized)' : r.categoryKey;
+    const prev = map.get(label);
+    const inc = parseFloat(r.incomeTotal);
+    if (prev) {
+      prev.income += inc;
+    } else {
+      map.set(label, { income: inc, currency: r.currency });
+    }
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, ...v }))
+    .filter((a) => a.income > 0)
+    .sort((a, b) => b.income - a.income)
     .slice(0, 14);
 }
 
@@ -93,7 +113,8 @@ export function DocumentPage() {
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [monthly, setMonthly] = useState<Paged<SummaryRow> | null>(null);
   const [byCat, setByCat] = useState<Paged<CategorySummaryRow> | null>(null);
-  const [insights, setInsights] = useState<InsightsResponse | null>(null);
+  // Insights stub hidden until real insights ship — re-enable with getDocumentInsights + card below.
+  // const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [tx, setTx] = useState<TransactionsPage | null>(null);
   const [txPage, setTxPage] = useState(1);
   const [analyticsErr, setAnalyticsErr] = useState<string | null>(null);
@@ -141,14 +162,14 @@ export function DocumentPage() {
   const loadAnalytics = useCallback(async () => {
     setAnalyticsErr(null);
     try {
-      const [m, c, ins] = await Promise.all([
+      const [m, c] = await Promise.all([
         listMonthlyAnalytics(id, { limit: 120 }),
         listCategoryAnalytics(id, { limit: 500 }),
-        getDocumentInsights(id),
+        // getDocumentInsights(id),
       ]);
       setMonthly(m);
       setByCat(c);
-      setInsights(ins);
+      // setInsights(ins);
     } catch (e) {
       setAnalyticsErr(e instanceof Error ? e.message : 'Analytics failed');
     }
@@ -217,6 +238,11 @@ export function DocumentPage() {
 
   const categoryData = useMemo(
     () => (byCat ? aggregateCategoryExpense(byCat.items) : []),
+    [byCat],
+  );
+
+  const categoryIncomeData = useMemo(
+    () => (byCat ? aggregateCategoryIncome(byCat.items) : []),
     [byCat],
   );
 
@@ -326,6 +352,7 @@ export function DocumentPage() {
             <div className="alert alert-error">{analyticsErr}</div>
           ) : null}
 
+          {/* Insights stub — re-enable when backend ships real insights (see loadAnalytics + imports).
           {insights ? (
             <div className="card">
               <h2 className="card__title">Insights</h2>
@@ -334,11 +361,13 @@ export function DocumentPage() {
               </p>
             </div>
           ) : null}
+          */}
 
           <div className="card">
             <h2 className="card__title">Cash flow by month</h2>
             <p className="muted" style={{ marginTop: '-0.5rem' }}>
-              Income vs expense totals (UTC month buckets).
+              Income vs expense totals (UTC month buckets). Multiple currencies
+              in one file are rolled up to USD in summaries.
             </p>
             {monthlyData.length === 0 ? (
               <p className="empty-hint">No summary rows yet.</p>
@@ -398,7 +427,8 @@ export function DocumentPage() {
           <div className="card">
             <h2 className="card__title">Spending by category</h2>
             <p className="muted" style={{ marginTop: '-0.5rem' }}>
-              Sum of expense magnitudes across months (top categories).
+              Sum of expense magnitudes across months (top categories). If the
+              file mixes currencies, totals are converted to USD in summaries.
             </p>
             {categoryData.length === 0 ? (
               <p className="empty-hint">No category breakdown.</p>
@@ -450,6 +480,72 @@ export function DocumentPage() {
                         />
                       ))}
                     </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2 className="card__title">Income by category</h2>
+            <p className="muted" style={{ marginTop: '-0.5rem' }}>
+              Positive amounts by category (top categories). Same currency rule as
+              spending when multiple currencies appear in the file.
+            </p>
+            {categoryIncomeData.length === 0 ? (
+              <p className="empty-hint">No income by category.</p>
+            ) : (
+              <div className="chart-wrap chart-wrap--tall">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={categoryIncomeData}
+                    margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="4 4"
+                      horizontal={false}
+                      stroke="var(--border)"
+                    />
+                    <XAxis
+                      type="number"
+                      tick={{ fill: 'var(--muted)', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) =>
+                        fmtMoney(
+                          Number(v),
+                          categoryIncomeData[0]?.currency ?? 'USD',
+                        )
+                      }
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={120}
+                      tick={{ fill: 'var(--text)', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value: number) =>
+                        fmtMoney(
+                          value,
+                          categoryIncomeData[0]?.currency ?? 'USD',
+                        )
+                      }
+                      contentStyle={{
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        fontSize: 13,
+                      }}
+                    />
+                    <Bar
+                      dataKey="income"
+                      fill="var(--chart-income)"
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={22}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
