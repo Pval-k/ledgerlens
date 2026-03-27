@@ -127,9 +127,6 @@ Current route groups:
 - Analytics: insights (stub), monthly summaries, category summaries
 - Health: root, live, ready, metrics
 
-For the full method/path list with request fields, see:
-- [`docs/interview-13-api-endpoints.md`](docs/interview-13-api-endpoints.md)
-
 ## Data model (high level)
 
 Core entities:
@@ -143,5 +140,4 @@ Core entities:
 ## Docs
 
 - [`docs/progress.md`](docs/progress.md) — full build diary and decisions timeline
-- [`docs/interview-prep.md`](docs/interview-prep.md) — section hub with detailed beginner-friendly deep dives
 

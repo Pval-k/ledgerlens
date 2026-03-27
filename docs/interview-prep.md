@@ -29,3 +29,9 @@ Read top to bottom in order.
 - Day 2: Sections 5-7
 - Day 3: Sections 8-10
 - Day 4: Sections 11-14
+
+## Final readiness
+
+When you finish all sections, use:
+
+- [Interview Mastery Guide](./interview-mastery.md) — drills, tradeoffs, failure stories, and a pass/fail readiness checklist
