@@ -22,7 +22,7 @@ function AppHeader() {
         style={{ textDecoration: 'none' }}
       >
         <span className="app-brand__title">LedgerLens</span>
-        <span className="app-brand__sub">CSV → insights</span>
+        <span className="app-brand__sub">CSV → analytics</span>
       </Link>
       <div className="app-header__actions">
         {token && user ? (

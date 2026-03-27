@@ -47,14 +47,14 @@ export class AnalyticsService {
     }
   }
 
-  /** Placeholder for anomaly / RAG insights — same user scope as other analytics. */
+  /** Placeholder — same user scope as other analytics. */
   async insightsStub(documentId: string, userId: string) {
     await this.ensureDocument(documentId, userId);
     return {
       documentId,
       status: 'planned' as const,
       message:
-        'Anomaly detection and RAG-backed insights will ship in a follow-up milestone.',
+        'Document-level insights are not implemented yet; monthly and category analytics are available today.',
     };
   }
 

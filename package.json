@@ -2,7 +2,7 @@
   "name": "ledgerlens",
   "version": "1.0.0",
   "private": true,
-  "description": "LedgerLens monorepo (api, worker, web) managed by pnpm workspaces.",
+  "description": "Full-stack financial data processing system with async document ingestion, PostgreSQL, background jobs, and deterministic analytics.",
   "author": "",
   "license": "MIT",
   "pnpm": {
