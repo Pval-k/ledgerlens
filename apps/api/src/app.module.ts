@@ -7,6 +7,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
@@ -60,6 +61,7 @@ const isProd = process.env.NODE_ENV === 'production';
     DocumentsModule,
     AnalyticsModule,
     HealthModule,
+    MetricsModule,
   ],
   providers: [
     {

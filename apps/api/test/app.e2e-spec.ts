@@ -17,7 +17,7 @@ describe('App (e2e)', () => {
     process.env.JWT_SECRET = 'e2e-jwt-secret-test';
     process.env.DATABASE_URL ??=
       process.env.E2E_DATABASE_URL ??
-      'postgresql://postgres:postgres@127.0.0.1:5432/ledgerlens_test';
+      'postgresql://user:password@127.0.0.1:5432/ledgerlens';
     process.env.REDIS_URL ??= 'redis://127.0.0.1:6379';
     process.env.S3_ENDPOINT ??= 'http://127.0.0.1:9000';
     process.env.S3_ACCESS_KEY_ID ??= 'minioadmin';

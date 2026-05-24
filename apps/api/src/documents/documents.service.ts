@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { DocumentWithTransactionCount } from '../prisma/prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { QueueService } from '../queue/queue.service';
 import { StorageService } from '../storage/storage.service';
 import { safeStorageBasename } from './filename.util';
@@ -29,6 +30,7 @@ export class DocumentsService {
     private readonly idempotency: IdempotencyService,
     private readonly queue: QueueService,
     private readonly storage: StorageService,
+    private readonly metrics: MetricsService,
   ) {}
 
   listDocuments(userId: string) {
@@ -145,6 +147,7 @@ export class DocumentsService {
           documentId,
           document.storageKey,
         );
+        this.metrics.recordIngestEnqueued();
 
         return {
           ok: true as const,

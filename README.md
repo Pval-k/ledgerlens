@@ -169,4 +169,5 @@ Core entities:
 ## Docs
 
 - [`docs/progress.md`](docs/progress.md) — full build diary and decisions timeline
+- [`docs/observability-and-testing.md`](docs/observability-and-testing.md) — worker/API tests, Prometheus metrics, Grafana dashboard
 

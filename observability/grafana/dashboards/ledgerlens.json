@@ -1,0 +1,89 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "API latency (p95)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Queue depth (waiting / active / failed)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "bullmq_queue_waiting_jobs",
+          "legendFormat": "waiting"
+        },
+        {
+          "expr": "bullmq_queue_active_jobs",
+          "legendFormat": "active"
+        },
+        {
+          "expr": "bullmq_queue_failed_jobs",
+          "legendFormat": "failed"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Ingest job duration (p95)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ingest_job_duration_seconds_bucket{status=\"success\"}[5m])) by (le))",
+          "legendFormat": "p95 success"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Ingest outcomes (rate)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(ingest_jobs_total{status=\"success\"}[5m]))",
+          "legendFormat": "success/s"
+        },
+        {
+          "expr": "sum(rate(ingest_jobs_total{status=\"error\"}[5m]))",
+          "legendFormat": "error/s"
+        },
+        {
+          "expr": "sum(rate(ingest_enqueue_total[5m]))",
+          "legendFormat": "enqueued/s"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["ledgerlens"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "LedgerLens",
+  "uid": "ledgerlens-main",
+  "version": 1
+}

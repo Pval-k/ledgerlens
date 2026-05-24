@@ -31,7 +31,15 @@ export class QueueService implements OnModuleInit {
     );
   }
 
-  async getQueueMetrics() {
+  async getQueueMetrics(): Promise<{
+    queueName: string;
+    waiting: number;
+    active: number;
+    completed: number;
+    failed: number;
+    delayed: number;
+    paused: number;
+  }> {
     const counts = await this.queue.getJobCounts(
       'waiting',
       'active',
@@ -42,7 +50,12 @@ export class QueueService implements OnModuleInit {
     );
     return {
       queueName: DOCUMENT_QUEUE_NAME,
-      ...counts,
+      waiting: counts.waiting ?? 0,
+      active: counts.active ?? 0,
+      completed: counts.completed ?? 0,
+      failed: counts.failed ?? 0,
+      delayed: counts.delayed ?? 0,
+      paused: counts.paused ?? 0,
     };
   }
 }
